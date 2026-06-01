@@ -1,3 +1,6 @@
+import copy
+
+
 class FakeCinder:
     def __init__(self):
         self.volumes = {}            # id -> dict
@@ -13,7 +16,7 @@ class FakeCinder:
             {"reference": {"source-name": v["backend_name"]}, "size": v["size"],
              "safe_to_manage": True})
     def list_manageable(self, host):
-        return list(self._unmanaged.get(host, []))
+        return [copy.deepcopy(item) for item in self._unmanaged.get(host, [])]
     def manage(self, host, ref, name, volume_type, bootable, availability_zone, metadata=None):
         nid = f"dst-{name}"
         self.managed_on.append(dict(host=host, ref=ref, volume_type=volume_type,
