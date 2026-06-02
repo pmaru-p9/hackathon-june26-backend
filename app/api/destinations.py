@@ -36,6 +36,24 @@ def list_destinations():
     return out
 
 
+class DraftTestIn(BaseModel):
+    authUrl: str
+    username: str
+    password: str
+    projectName: str
+    userDomain: str = "Default"
+    projectDomain: str = "Default"
+
+
+@router.post("/test")
+def test_draft(body: DraftTestIn):
+    """Validate unsaved credentials (the registration form tests before saving)."""
+    ok, msg = get_discovery().test_draft(body.dict())
+    if not ok:
+        raise HTTPException(status_code=502, detail=msg)
+    return {"reachable": True}
+
+
 @router.post("/{did}/test")
 def test_connection(did: str):
     disc = get_discovery()
