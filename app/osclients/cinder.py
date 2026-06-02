@@ -19,6 +19,11 @@ class CinderOps:
         self.c.unmanage(volume_id)          # POST volumes/{id}/action {"os-unmanage": null}
         return backend_name
 
+    def unmanage_by_id(self, volume_id: str) -> None:
+        """Unmanage a volume by id without needing it tracked locally — used to release
+        a destination-managed volume during rollback (we don't need its backend name)."""
+        self.c.unmanage(volume_id)
+
     def resolve_pool(self) -> str:
         pools = self.c.pools()
         if not pools:

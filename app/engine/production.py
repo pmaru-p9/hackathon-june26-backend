@@ -6,10 +6,9 @@ Client responsibilities (cross-cloud):
   - source clients (src_nova, src_cinder) perform C1 stop, C2 detach, C3 unmanage
   - dest clients (dst_cinder, dst_nova) perform C4 manage, C5 create-server
   - dst_neutron pre-creates ports in staging
-The single-client `cutover()` helper from app.engine.cutover is used for the
-shared-backend happy path where stop/detach/unmanage run on the source; the dest
-manage/create are driven via the dest clients carried in `plan["cutoverArgs"]`.
-The end-to-end source/dest split is exercised by the gated live suite (A-INT)."""
+The `cutover()` generator takes both source and destination clients and yields each
+StepResult as it completes, so failures leave accurate checkpoints. The end-to-end
+source/dest split is exercised by the gated live suite (A-INT)."""
 from app.engine.base import MigrationContext
 from app.engine import staging, cutover, verify, rollback as rb
 
@@ -55,13 +54,18 @@ class ProductionEngine:
 
     def cutover(self, m):
         mid = self._mid(m)
-        for res in cutover.cutover(self.src_nova, self.src_cinder, **self.plan["cutoverArgs"]):
+        # C1-C3 on source clients, C4-C5 on destination clients (shared backend).
+        for res in cutover.cutover(self.src_nova, self.src_cinder, self.dst_nova,
+                                   self.dst_cinder, **self.plan["cutoverArgs"]):
             self.repo.checkpoint(mid, res.step, "done" if res.ok else "failed", res.checkpoint)
+            if res.step == "C5":
+                self.plan["destServerId"] = res.checkpoint["destServerId"]
         return []
 
     def verify(self, m):
         mid = self._mid(m)
-        for res in verify.verify_and_cleanup(self.src_nova, self.plan["destServerId"],
+        for res in verify.verify_and_cleanup(self.dst_nova, self.src_nova,
+                                             self.plan["destServerId"],
                                              self.plan["sourceServerId"],
                                              self.plan["sourceCleanup"]):
             self.repo.checkpoint(mid, res.step, "done", res.checkpoint)

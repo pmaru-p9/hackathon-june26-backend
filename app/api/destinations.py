@@ -29,8 +29,11 @@ def create(body: DestinationIn):
 
 @router.get("")
 def list_destinations():
-    return [{"id": d["metadata"]["name"], **d["spec"], "status": d.get("status", {})}
-            for d in get_destinations().list()]
+    out = []
+    for d in get_destinations().list():
+        spec = {k: v for k, v in d["spec"].items() if k != "credentialsSecretRef"}
+        out.append({"id": d["metadata"]["name"], **spec, "status": d.get("status", {})})
+    return out
 
 
 @router.post("/{did}/test")

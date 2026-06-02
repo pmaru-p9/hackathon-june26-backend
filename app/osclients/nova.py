@@ -12,14 +12,23 @@ class NovaOps:
     def stop(self, server_id: str) -> None:
         self.c.stop(server_id)
 
+    def start(self, server_id: str) -> None:
+        self.c.start(server_id)
+
     def detach_volume(self, server_id: str, volume_id: str) -> None:
         self.c.detach_volume(server_id, volume_id)
+
+    def attach_volume(self, server_id: str, volume_id: str) -> None:
+        self.c.attach_volume(server_id, volume_id)
 
     def create_server(self, **kw) -> dict:
         return self.c.create_server(**kw)
 
     def delete(self, server_id: str) -> None:
         self.c.delete(server_id)
+
+    def server_status(self, server_id: str) -> str:
+        return self.c.server_status(server_id)
 
     def flavors(self) -> list[dict]:
         return list(self.c.flavors.values())

@@ -32,16 +32,19 @@ class FakeCinder:
 class FakeNova:
     def __init__(self):
         self.servers = {}; self.flavors = {}; self.stopped = []; self.created = []
-        self.detached = []; self.deleted = []
+        self.detached = []; self.deleted = []; self.started = []; self.attached = []
     def add_server(self, sid, **kw): self.servers[sid] = dict(id=sid, **kw)
     def add_flavor(self, fid, name, vcpus, ram, disk):
         self.flavors[fid] = dict(id=fid, name=name, vcpus=vcpus, ram=ram, disk=disk)
     def stop(self, sid): self.stopped.append(sid); self.servers[sid]["status"] = "SHUTOFF"
+    def start(self, sid): self.started.append(sid); self.servers[sid]["status"] = "ACTIVE"
     def detach_volume(self, sid, vid): self.detached.append((sid, vid))
+    def attach_volume(self, sid, vid): self.attached.append((sid, vid))
     def create_server(self, **kw):
         sid = "dst-srv"; self.created.append(kw)
         self.servers[sid] = dict(id=sid, status="ACTIVE", **kw); return dict(id=sid)
     def delete(self, sid): self.deleted.append(sid); self.servers.pop(sid, None)
+    def server_status(self, sid): return self.servers.get(sid, {}).get("status", "UNKNOWN")
 
 class FakeNeutron:
     def __init__(self): self.ports = {}; self.subnets = {}

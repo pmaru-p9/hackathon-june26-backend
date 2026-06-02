@@ -12,7 +12,7 @@ def rollback(nova, cinder, neutron, failed_at, checkpoints, source_server_id,
     # C4: undo destination manage (unmanage on dest) so the LUN is free again
     if "C4" in reached:
         for dvid in checkpoints.get("C4", {}).get("destVolIds", []):
-            cinder.c.unmanage(dvid)
+            cinder.unmanage_by_id(dvid)
             actions.append(f"unmanage_dest:{dvid}")
     # C3: re-manage the unmanaged volumes back on the SOURCE
     if "C3" in reached:
@@ -25,9 +25,11 @@ def rollback(nova, cinder, neutron, failed_at, checkpoints, source_server_id,
     # C2: reattach volumes to the source VM in original order
     if "C2" in reached:
         for vid in attach_order:
+            nova.attach_volume(source_server_id, vid)
             actions.append(f"reattach:{vid}")
     # C1: power the source VM back on
     if "C1" in reached:
+        nova.start(source_server_id)
         actions.append(f"power_on:{source_server_id}")
     # S1: delete the pre-created destination ports
     if "S1" in reached:
