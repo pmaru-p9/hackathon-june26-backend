@@ -1,5 +1,5 @@
-from tests.fakes.openstack import FakeCinder, FakeNova, FakeNeutron
-from tests.fakes.k8s import FakeCustomObjects, FakeSecrets
+from tests.fakes.openstack import FakeCinder
+from tests.fakes.k8s import FakeCustomObjects
 
 def test_fake_cinder_unmanage_then_manageable():
     c = FakeCinder()
