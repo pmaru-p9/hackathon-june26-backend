@@ -1,0 +1,6 @@
+apiVersion: v2
+name: pcd-migration
+description: PCD-to-PCD VM migration POD (shared-backend, minimal-downtime)
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

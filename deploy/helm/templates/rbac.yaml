@@ -1,0 +1,26 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pcd-migration
+  namespace: {{ .Release.Namespace }}
+rules:
+  - apiGroups: ["migration.pf9.io"]
+    resources: ["migrations", "destinationpcds"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pcd-migration
+  namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: pcd-migration
+subjects:
+  - kind: ServiceAccount
+    name: pcd-migration
+    namespace: {{ .Release.Namespace }}
