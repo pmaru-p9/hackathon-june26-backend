@@ -1,0 +1,43 @@
+import time
+
+
+class ManageableNotReady(Exception):
+    ...
+
+
+class CinderOps:
+    """Thin wrapper translating engine intent into Cinder admin API calls.
+    `client` exposes: unmanage(id), list_manageable(host), manage(...),
+    set_image_metadata(id, meta), services(), pools(). In production this is a
+    cinderclient v3 adapter; in tests it's FakeCinder."""
+
+    def __init__(self, client):
+        self.c = client
+
+    def unmanage(self, volume_id: str) -> str:
+        backend_name = self.c.volumes[volume_id]["backend_name"]
+        self.c.unmanage(volume_id)          # POST volumes/{id}/action {"os-unmanage": null}
+        return backend_name
+
+    def resolve_pool(self) -> str:
+        pools = self.c.pools()
+        if not pools:
+            raise RuntimeError("no cinder-volume pools on destination")
+        return pools[0]["name"]             # h@be#pool
+
+    def wait_for_manageable(self, host: str, backend_name: str, attempts: int, delay: int) -> dict:
+        for _ in range(attempts):
+            for entry in self.c.list_manageable(host):
+                ref = entry["reference"]
+                if ref.get("source-name") == backend_name and entry.get("safe_to_manage"):
+                    return ref
+            if delay:
+                time.sleep(delay)
+        raise ManageableNotReady(f"{backend_name} not manageable on {host}")
+
+    def manage(self, host, ref, name, volume_type, bootable, az, metadata=None) -> dict:
+        return self.c.manage(host=host, ref=ref, name=name, volume_type=volume_type,
+                             bootable=bootable, availability_zone=az, metadata=metadata)
+
+    def set_image_metadata(self, volume_id: str, meta: dict) -> None:
+        self.c.set_image_metadata(volume_id, meta)
