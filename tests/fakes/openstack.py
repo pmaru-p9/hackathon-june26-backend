@@ -11,7 +11,9 @@ class FakeCinder:
                                  backend_name=backend_name, status="available",
                                  attached_to=attached_to)
     def unmanage(self, vid):
-        v = self.volumes.pop(vid)
+        v = self.volumes.pop(vid, None)
+        if v is None:        # already absent (e.g. dest unmanage during rollback unit tests)
+            return
         self._unmanaged.setdefault(v["host"], []).append(
             {"reference": {"source-name": v["backend_name"]}, "size": v["size"],
              "safe_to_manage": True})
