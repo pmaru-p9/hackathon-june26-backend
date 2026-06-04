@@ -3,6 +3,22 @@ import uuid
 from app.store.crd import CrdStore
 from app.store.secrets import SecretStore
 
+# Human-readable summaries for each checkpoint id, surfaced in the CR status so
+# `kubectl get migration -o yaml` reads self-explanatory. The id (name) stays the
+# canonical key used by rollback/verify logic — only an extra `summary` is added.
+STEP_SUMMARIES = {
+    "S1": "stage destination network port",
+    "C1": "stop source VM",
+    "C2": "detach data volumes",
+    "C2b": "preserve delete-on-termination flag",
+    "C2c": "delete source instance",
+    "C3": "unmanage volume on source",
+    "C4": "manage volume on destination",
+    "C5": "create VM on destination",
+    "V1": "verify destination VM active",
+    "V2": "source already deleted",
+}
+
 
 class MigrationRepo:
     def __init__(self, co_client, sec_client, namespace):
@@ -37,7 +53,8 @@ class MigrationRepo:
 
     def checkpoint(self, mid, step, state, data=None):
         cur = self.get(mid)
-        cur["status"]["steps"].append({"name": step, "state": state, "checkpoint": data or {}})
+        cur["status"]["steps"].append({"name": step, "summary": STEP_SUMMARIES.get(step, ""),
+                                       "state": state, "checkpoint": data or {}})
         self.crd.patch(self.ns, "Migration", mid, {"status": cur["status"]})
 
     def store_source_token(self, mid, token, auth_url, project_id):

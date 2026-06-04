@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Header, BackgroundTasks, HTTPException
+from fastapi import APIRouter, Header, BackgroundTasks, HTTPException, Request
 from pydantic import BaseModel
 
 from app.deps import get_migrations, get_discovery
+from app.api.authurl import normalize_auth_url
 
 router = APIRouter(prefix="/api/v1/migrations", tags=["migrations"])
 
@@ -19,28 +20,32 @@ class LaunchIn(BaseModel):
 
 
 @router.post("/preflight")
-def preflight(body: LaunchIn, x_auth_token: str = Header(...),
+def preflight(body: LaunchIn, request: Request, x_auth_token: str = Header(...),
               x_auth_url: str = Header(...), x_project_id: str = Header(...)):
     """No-mutation: build the context from live data and run P1-P8. The UI Review
     step renders these results and only enables Migrate when all pass."""
     from app.engine.production import build_context_from_profile
     from app.engine.preflight import run_preflight
+    auth_url = normalize_auth_url(x_auth_url, request)
     disc = get_discovery()
-    profile = disc.assess(body.dict(), x_auth_url, x_auth_token, x_project_id)
+    profile = disc.assess(body.dict(), auth_url, x_auth_token, x_project_id)
     checks = run_preflight(build_context_from_profile(profile))
     return [{"id": c.id, "passed": c.passed, "message": c.message} for c in checks]
 
 
 @router.post("", status_code=202)
-def launch(body: LaunchIn, background: BackgroundTasks,
+def launch(body: LaunchIn, request: Request, background: BackgroundTasks,
            x_auth_token: str = Header(...), x_auth_url: str = Header(...),
            x_project_id: str = Header(...)):
     repo = get_migrations()
+    # normalize before storing: the runner re-uses this auth URL later, and the UI sends
+    # a relative "/keystone" which openstacksdk can't resolve server-side.
+    auth_url = normalize_auth_url(x_auth_url, request)
     m = repo.create(vm_id=body.vmIds[0], vm_name=body.vmName,
                     destination_ref=body.destinationId, target_project=body.targetProject,
                     az=body.az, network_map=body.networkMap, flavor=body.flavor,
                     preserve=body.preserve, source_cleanup=body.sourceCleanup)
-    repo.store_source_token(m["id"], x_auth_token, x_auth_url, x_project_id)
+    repo.store_source_token(m["id"], x_auth_token, auth_url, x_project_id)
     disc = get_discovery()
     runner = disc.runner_for(m["id"]) if disc else None
     if runner:

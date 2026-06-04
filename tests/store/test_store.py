@@ -21,7 +21,10 @@ def test_migration_checkpoint_append():
                     preserve={}, source_cleanup="keepStopped")
     repo.checkpoint(m["id"], step="C3", state="done", data={"unmanaged": ["volume-v1"]})
     got = repo.get(m["id"])
-    assert got["status"]["steps"][-1]["checkpoint"]["unmanaged"] == ["volume-v1"]
+    last = got["status"]["steps"][-1]
+    assert last["checkpoint"]["unmanaged"] == ["volume-v1"]
+    assert last["name"] == "C3"                              # canonical id unchanged (logic keys off this)
+    assert last["summary"] == "unmanage volume on source"    # self-explanatory summary added
 
 
 def test_destination_create_cleans_secret_if_cr_fails():
