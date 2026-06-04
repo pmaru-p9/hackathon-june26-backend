@@ -100,13 +100,16 @@ class ProdNova:
         return self.conn.compute.get_server(sid).status
 
     def attachment_dot(self, server_id, volume_id):
-        # Nova volume-attachments API, microversion >= 2.79 exposes delete_on_termination.
-        a = self.conn.compute.get_volume_attachment(volume_id, server_id)
-        return bool(getattr(a, "delete_on_termination", False))
+        # Nova volume-attachments API (>=2.79 exposes delete_on_termination). The SDK's
+        # get_volume_attachment(id, server) is finicky; list and match by volume id.
+        for a in self.conn.compute.volume_attachments(server_id):
+            if getattr(a, "volume_id", getattr(a, "id", None)) == volume_id:
+                return bool(getattr(a, "delete_on_termination", False))
+        return False
 
     def set_attachment_dot(self, server_id, volume_id, value):
         # microversion >= 2.85 required to update delete_on_termination.
-        self.conn.compute.update_volume_attachment(server_id, volume_id,
+        self.conn.compute.update_volume_attachment(volume_id, server_id,
                                                    delete_on_termination=value)
 
 
