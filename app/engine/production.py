@@ -21,7 +21,9 @@ def build_context_from_profile(p: dict) -> MigrationContext:
         resolved_volume_type=p.get("resolvedVolumeType"), flavor_match=p["flavorMatch"],
         ip_fits_and_free=all(n["destFits"] for n in nics),
         mac_free=all(n["macFree"] for n in nics),
-        volumes_detachable=p["volumesDetachable"], quota_ok=p["quotaOk"])
+        volumes_detachable=p["volumesDetachable"], quota_ok=p["quotaOk"],
+        dot_readable=p.get("dotReadable", False), dot_is_true=p.get("dotIsTrue", False),
+        dot_flippable=p.get("dotFlippable", False))
 
 
 class ProductionEngine:

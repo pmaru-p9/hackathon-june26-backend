@@ -23,10 +23,12 @@ class MigrationPlan:
     attach_order: list
     source_cleanup: str
     image_meta: dict = field(default_factory=dict)
+    dot_original: bool = False
 
 
 def build_plan(migration_spec: dict, source_profile: dict, context: MigrationContext, *,
-               dest_flavor_id: str, dest_volume_type: str, dest_pool_host: str) -> MigrationPlan:
+               dest_flavor_id: str, dest_volume_type: str, dest_pool_host: str,
+               dot_original: bool = False) -> MigrationPlan:
     return MigrationPlan(
         context=context,
         network_map=[{"destNetworkId": n["destNetworkId"], "ip": n["ip"], "mac": n["mac"]}
@@ -43,6 +45,9 @@ def build_plan(migration_spec: dict, source_profile: dict, context: MigrationCon
         name=migration_spec.get("source", {}).get("vmName", source_profile["vmId"]),
         source_host=dest_pool_host,
         attach_order=list(source_profile["attachedVolumes"]),
-        source_cleanup=migration_spec.get("sourceCleanup", "keepStopped"),
+        # boot-from-volume is always a true move; the source instance is deleted to free
+        # the root volume, so keepStopped does not apply.
+        source_cleanup="delete",
         image_meta=source_profile.get("imageMeta", {}),
+        dot_original=dot_original,
     )

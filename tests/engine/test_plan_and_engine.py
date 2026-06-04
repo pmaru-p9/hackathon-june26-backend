@@ -38,7 +38,7 @@ def test_build_plan_maps_fields():
     assert plan.network_map == [{"destNetworkId": "netD", "ip": "10.20.0.15",
                                  "mac": "fa:16:3e:aa:11"}]
     assert plan.flavor_id == "f1" and plan.volume_type == "vt" and plan.az == "az1"
-    assert plan.name == "db" and plan.source_cleanup == "keepStopped"
+    assert plan.name == "db" and plan.source_cleanup == "delete"
 
 
 def test_production_engine_happy_path_threads_ports_and_server():
