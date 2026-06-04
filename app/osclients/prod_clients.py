@@ -48,8 +48,9 @@ class ProdCinder:
                 for s in self.cinder.services.list(binary="cinder-volume")]
 
     def pools(self):
+        # cinderclient PoolManager.list uses `detailed=`, not `detail=`.
         return [{"name": p.name, "backend_name": getattr(p, "volume_backend_name", None)}
-                for p in self.cinder.pools.list(detail=True)]
+                for p in self.cinder.pools.list(detailed=True)]
 
 
 class ProdNova:
