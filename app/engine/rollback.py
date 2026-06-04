@@ -45,8 +45,11 @@ def reverse_migrate(src_nova, src_cinder, dst_nova, dst_cinder, src_neutron, dst
             dst_cinder.unmanage_by_id(dvid)
             actions.append(f"unmanage_dest:{dvid}")
         # re-manage volumes back on the source
+        # re-manage on the SOURCE pool (plan.source_host is the DESTINATION pool used for
+        # the forward manage; reverse must target the source pool).
+        src_pool = plan.source_pool_host or plan.source_host
         for backend_name in checkpoints.get("C3", {}).get("unmanaged", []):
-            src_cinder.manage(host=plan.source_host, ref={"source-name": backend_name},
+            src_cinder.manage(host=src_pool, ref={"source-name": backend_name},
                               name=backend_name, volume_type=None, bootable=True, az=None)
             actions.append(f"remanage_source:{backend_name}")
         # recreate the source port(s) with original IP/MAC

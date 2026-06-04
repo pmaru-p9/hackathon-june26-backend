@@ -17,6 +17,7 @@ def resolve_shared(*, source_cinder, source_bp, dest_cinder, dest_bp, root_volum
     return {
         "sharedBackend": dest_pool is not None,
         "destPoolHost": dest_pool,
+        "sourcePoolHost": src_host,         # for reverse re-manage on the source
         # host-pinned manage doesn't need a type; expose a non-None marker for P4.
         "resolvedVolumeType": dest_pool,
         "sourceExport": src_export,

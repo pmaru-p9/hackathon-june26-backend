@@ -44,7 +44,8 @@ def assemble_runner(mid, *, migrations, discovery, build_source_clients, build_d
     plan = build_plan(spec, profile, context, dest_flavor_id=dest_flavor_id,
                       dest_volume_type=rb.get("resolvedVolumeType"),
                       dest_pool_host=rb.get("destPoolHost"),
-                      dot_original=bool(rb.get("dotIsTrue", False)))
+                      dot_original=bool(rb.get("dotIsTrue", False)),
+                      source_pool_host=rb.get("sourcePoolHost"))
     engine = ProductionEngine(migrations, src_nova, src_cinder, dst_nova, dst_cinder,
                               dst_neutron, plan, src_neutron=src_neutron)
     return MigrationRunner(migrations, engine)
