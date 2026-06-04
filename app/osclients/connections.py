@@ -31,9 +31,12 @@ def dest_connection_project(*, auth_url, username, password, project_id, user_do
 
 def cinder_client(conn, region_name=None):
     """python-cinderclient v3 from an openstacksdk Connection's session. Microversion 3.8
-    is required for manageable-list (LIVE-VALIDATE)."""
+    is required for manageable-list. region_name must match the cloud's catalog region or
+    endpoint lookup returns nothing (e.g. pools.list() comes back empty); default to the
+    connection's own region."""
     from cinderclient import client as cc
-    return cc.Client("3.8", session=conn.session, region_name=region_name)
+    region = region_name or getattr(getattr(conn, "config", None), "region_name", None)
+    return cc.Client("3.8", session=conn.session, region_name=region)
 
 
 class DiscoveryConn:
