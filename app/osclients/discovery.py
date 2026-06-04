@@ -95,7 +95,9 @@ class DiscoveryService:
             profile, network_map, dest_subnets, dest_macs_in_use=[],
             is_admin=sb["isAdmin"], dest_reachable=dest_reachable,
             shared_backend=sb["sharedBackend"], resolved_volume_type=sb["resolvedVolumeType"],
-            flavor_match=flavor_match, volumes_detachable=True, quota_ok=True)
+            flavor_match=flavor_match, volumes_detachable=True, quota_ok=True,
+            dot_readable=sb.get("dotReadable", True), dot_is_true=sb.get("dotIsTrue", False),
+            dot_flippable=sb.get("dotFlippable", True))
 
     def resolve_backend(self, launch_body, auth_url, token, project_id):
         """Full shared-backend resolution incl. destPoolHost (for the runner's plan)."""

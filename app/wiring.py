@@ -117,6 +117,16 @@ def wire_production():
         res = resolve_shared(source_cinder=scin, source_bp=src_bp, dest_cinder=dcin,
                              dest_bp=dst_bp, root_volume_id=profile["rootVolumeId"])
         res["isAdmin"] = _is_admin(sconn)
+        # Read the root volume's delete_on_termination so the engine preserves it; PCD Nova
+        # supports >=2.85, so a readable flag is also flippable (P9).
+        snova = ProdNova(sconn)
+        try:
+            res["dotIsTrue"] = bool(snova.attachment_dot(launch_body["vmIds"][0],
+                                                         profile["rootVolumeId"]))
+            res["dotReadable"] = True
+            res["dotFlippable"] = True
+        except Exception:  # noqa: BLE001
+            res["dotIsTrue"], res["dotReadable"], res["dotFlippable"] = False, False, False
         return res
 
     discovery.shared_resolver = shared_resolver

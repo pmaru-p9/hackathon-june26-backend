@@ -8,7 +8,9 @@ from app.osclients.neutron import ip_in_cidr
 def score_profile(source_profile: dict, network_map: dict, dest_subnets: list,
                   dest_macs_in_use, *, is_admin: bool, dest_reachable: bool,
                   shared_backend: bool, resolved_volume_type, flavor_match: bool,
-                  volumes_detachable: bool, quota_ok: bool) -> dict:
+                  volumes_detachable: bool, quota_ok: bool,
+                  dot_readable: bool = False, dot_is_true: bool = False,
+                  dot_flippable: bool = False) -> dict:
     macs = set(dest_macs_in_use or [])
     nics = []
     for nic in source_profile.get("nics", []):
@@ -29,4 +31,7 @@ def score_profile(source_profile: dict, network_map: dict, dest_subnets: list,
         "volumesDetachable": volumes_detachable,
         "quotaOk": quota_ok,
         "nics": nics,
+        "dotReadable": dot_readable,
+        "dotIsTrue": dot_is_true,
+        "dotFlippable": dot_flippable,
     }
