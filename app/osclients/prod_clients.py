@@ -25,6 +25,19 @@ class ProdCinder:
     def volume_status(self, vid):
         return self.cinder.volumes.get(vid).status
 
+    def volume_status_or_none(self, vid):
+        # Returns the volume's status, or None if it is gone from this Cinder (a successful
+        # unmanage removes the volume record). cinderclient raises NotFound -> 404.
+        try:
+            return self.cinder.volumes.get(vid).status
+        except Exception:  # noqa: BLE001 -- NotFound (volume gone) is the success signal
+            return None
+
+    def reset_state(self, vid, status):
+        # admin os-reset_status; clears a stuck 'error_unmanaging' back to 'available' so the
+        # unmanage can be retried.
+        self.cinder.volumes.reset_state(vid, state=status, attach_status="detached")
+
     def unmanage(self, vid):
         self.cinder.volumes.unmanage(vid)
 

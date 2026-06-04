@@ -18,9 +18,21 @@ class CinderOps:
     def __init__(self, client):
         self.c = client
 
-    def unmanage(self, volume_id: str) -> str:
+    def unmanage(self, volume_id: str, attempts: int = 6, delay: int = 5) -> str:
+        """Unmanage from this Cinder. The NFS driver can async-fail into
+        'error_unmanaging'; detect it, reset-state to available, and retry until the
+        volume is gone (success) or attempts are exhausted."""
         backend_name = self.c.backend_name(volume_id)
         self.c.unmanage(volume_id)          # POST volumes/{id}/action {"os-unmanage": null}
+        for _ in range(attempts):
+            status = self.c.volume_status_or_none(volume_id)
+            if status is None:
+                return backend_name          # gone from this Cinder = unmanaged
+            if status == "error_unmanaging":
+                self.c.reset_state(volume_id, "available")
+                self.c.unmanage(volume_id)
+            if delay:
+                time.sleep(delay)
         return backend_name
 
     def unmanage_by_id(self, volume_id: str) -> None:
