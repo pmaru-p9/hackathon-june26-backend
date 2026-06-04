@@ -66,6 +66,23 @@ class CinderOps:
                 time.sleep(delay)
         raise ManageableNotReady(f"{backend_name} not manageable on {host}")
 
+    @staticmethod
+    def _nfs_export(host: str) -> str:
+        """The pool component of an NFS-family host is the share export 'ip:/path'
+        (e.g. 'host@netapp-nfs1#10.9.1.210:/cinder_nfs_vol1'). Block drivers use a plain
+        pool name with no ':/' — return '' for those."""
+        pool = host.split("#", 1)[1] if "#" in host else ""
+        return pool if ":/" in pool else ""
+
+    def resolve_manage_ref(self, host: str, backend_name: str, attempts: int, delay: int) -> dict:
+        """Build the existing_ref for `manage`. NFS-family drivers (NetApp ONTAP NFS) do not
+        reliably populate list_manageable and require the FULL share path as source-name, so
+        construct it directly. Block drivers populate list_manageable — poll it as before."""
+        export = self._nfs_export(host)
+        if export:
+            return {"source-name": f"{export}/{backend_name}"}   # ip:/share/volume-<uuid>
+        return self.wait_for_manageable(host, backend_name, attempts=attempts, delay=delay)
+
     def manage(self, host, ref, name, volume_type, bootable, az, metadata=None) -> dict:
         return self.c.manage(host=host, ref=ref, name=name, volume_type=volume_type,
                              bootable=bootable, availability_zone=az, metadata=metadata)

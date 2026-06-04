@@ -2,6 +2,7 @@
 and rebuild instances. Regime A (source still exists) restores in place; Regime B (source
 already deleted) best-effort reverse-migrates, else raises ReverseMigrateError so the
 runner marks NeedsAttention."""
+from app.config import settings
 
 
 class ReverseMigrateError(Exception):
@@ -49,8 +50,13 @@ def reverse_migrate(src_nova, src_cinder, dst_nova, dst_cinder, src_neutron, dst
         # the forward manage; reverse must target the source pool).
         src_pool = plan.source_pool_host or plan.source_host
         for backend_name in checkpoints.get("C3", {}).get("unmanaged", []):
-            src_cinder.manage(host=src_pool, ref={"source-name": backend_name},
-                              name=backend_name, volume_type=None, bootable=True, az=None)
+            # NFS-family pools need the full share-path source-name; resolve_manage_ref
+            # builds it (or polls list_manageable for block drivers).
+            ref = src_cinder.resolve_manage_ref(
+                src_pool, backend_name, attempts=settings.manageable_poll_attempts,
+                delay=settings.manageable_poll_seconds)
+            src_cinder.manage(host=src_pool, ref=ref, name=backend_name,
+                              volume_type=None, bootable=True, az=None)
             actions.append(f"remanage_source:{backend_name}")
         # recreate the source port(s) with original IP/MAC
         port_ids = []

@@ -21,6 +21,29 @@ def test_unmanage_then_manage_uses_manageable_reference():
     assert fake.managed_on[0]["volume_type"] == "vt"
 
 
+def test_resolve_manage_ref_nfs_builds_full_path_without_listing():
+    fake = FakeCinder()
+    ops = CinderOps(client=fake)
+    host = "h@netapp-nfs1#10.9.1.210:/cinder_nfs_vol1"
+
+    ref = ops.resolve_manage_ref(host, "volume-abc", attempts=3, delay=0)
+
+    # full share-path source-name, and list_manageable was never consulted
+    assert ref == {"source-name": "10.9.1.210:/cinder_nfs_vol1/volume-abc"}
+    assert fake._unmanaged == {}      # no manageable scan happened
+
+
+def test_resolve_manage_ref_block_falls_back_to_manageable_list():
+    fake = FakeCinder()
+    fake.add_volume("v1", size=10, host="h@be#pool", bootable=True, backend_name="volume-v1")
+    ops = CinderOps(client=fake)
+    ops.unmanage("v1")               # populates the manageable list on h@be#pool
+
+    ref = ops.resolve_manage_ref("h@be#pool", "volume-v1", attempts=3, delay=0)
+
+    assert ref == {"source-name": "volume-v1"}
+
+
 class _ErrorUnmanagingCinder:
     """Simulates the NFS driver: the first unmanage async-fails into 'error_unmanaging';
     after a reset-state to 'available', the next unmanage succeeds (volume gone)."""

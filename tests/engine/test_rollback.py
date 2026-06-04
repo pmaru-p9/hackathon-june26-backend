@@ -12,7 +12,9 @@ def _plan():
         "ip": "10.0.0.5", "mac": "fa:16:3e:00:00:01"}], server_id="s1", volume_ids=["v1"],
         root_volume_id="v1", volume_type="vt", az="az1", flavor_id="f1", sgs=["default"],
         keypair="kp", metadata={}, name="db", source_host="h@be#pool", attach_order=["v1"],
-        source_cleanup="delete", dot_original=True)
+        source_cleanup="delete", dot_original=True,
+        # NetApp NFS source pool: reverse re-manage builds the full-path source-name directly
+        source_pool_host="h@netapp-nfs1#10.9.1.210:/cinder_nfs_vol1")
 
 
 def test_regime_a_restores_flag_and_powers_on():
