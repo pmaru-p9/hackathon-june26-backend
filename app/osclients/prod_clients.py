@@ -18,6 +18,10 @@ class ProdCinder:
         # LIVE-VALIDATE: driver-specific. Most drivers name the array volume "volume-<uuid>".
         return self._fmt.format(id=vid)
 
+    def volume_host(self, vid):
+        # 'uuid@backend#pool' — used to resolve the source NFS export via the blueprint.
+        return self.cinder.volumes.get(vid)._info.get("os-vol-host-attr:host")
+
     def unmanage(self, vid):
         self.cinder.volumes.unmanage(vid)
 

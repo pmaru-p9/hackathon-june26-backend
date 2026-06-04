@@ -37,6 +37,9 @@ class FakeDiscovery:
     def flavors(self, did):
         return [{"id": "f1", "name": "s", "vcpus": 1, "ram": 512, "disk": 0}]
 
+    def resolve_backend(self, body, url, token, pid):
+        return {"sharedBackend": False, "destPoolHost": None, "resolvedVolumeType": None}
+
 
 def test_assemble_runner_runs_preflight_and_fails_safe():
     repo = MigrationRepo(FakeCustomObjects(), FakeSecrets(), namespace="ns")

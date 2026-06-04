@@ -83,4 +83,41 @@ def wire_production():
 
     discovery.runner_factory = lambda mid: _LazyRunner(mid)
 
+    # --- shared-backend resolver (blueprint NFS-export match) ----------------------
+    from app.osclients import blueprint
+    from app.osclients.shared import resolve_shared
+    from app.osclients.profile import build_migration_profile
+
+    def _is_admin(conn):
+        try:
+            ref = conn.session.auth.get_auth_ref(conn.session)
+            return "admin" in (ref.role_names or [])
+        except Exception:  # noqa: BLE001
+            return False
+
+    def _base(auth_url):
+        return auth_url.rsplit("/keystone", 1)[0]
+
+    def shared_resolver(launch_body, tok):
+        sconn = connections.source_connection(tok["authUrl"], tok["token"], tok["projectId"])
+        scin = ProdCinder(connections.cinder_client(sconn))
+        profile = build_migration_profile(connections.SourceConn(sconn), launch_body["vmIds"][0])
+        src_bp = blueprint.fetch_blueprint(_base(tok["authUrl"]), tok["token"])
+
+        d = destinations.get(launch_body["destinationId"])["spec"]
+        creds = destinations.creds(launch_body["destinationId"])
+        dconn = connections.dest_connection_project(
+            auth_url=d["authUrl"], username=creds["username"], password=creds["password"],
+            project_id=launch_body["targetProject"], user_domain=creds["user_domain"],
+            region_name=d.get("region"))
+        dcin = ProdCinder(connections.cinder_client(dconn))
+        dst_bp = blueprint.fetch_blueprint(_base(d["authUrl"]), dconn.session.get_token())
+
+        res = resolve_shared(source_cinder=scin, source_bp=src_bp, dest_cinder=dcin,
+                             dest_bp=dst_bp, root_volume_id=profile["rootVolumeId"])
+        res["isAdmin"] = _is_admin(sconn)
+        return res
+
+    discovery.shared_resolver = shared_resolver
+
     set_repos(destinations=destinations, migrations=migrations, discovery=discovery)

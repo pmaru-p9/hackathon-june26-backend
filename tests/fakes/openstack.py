@@ -12,6 +12,8 @@ class FakeCinder:
                                  attached_to=attached_to)
     def backend_name(self, vid):
         return self.volumes[vid]["backend_name"]
+    def volume_host(self, vid):
+        return self.volumes[vid]["host"]
     def unmanage(self, vid):
         v = self.volumes.pop(vid, None)
         if v is None:        # already absent (e.g. dest unmanage during rollback unit tests)

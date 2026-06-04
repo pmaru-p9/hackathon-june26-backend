@@ -9,11 +9,14 @@ class DiscoveryService:
     """
 
     def __init__(self, conn_factory, draft_conn_factory=None, source_conn_factory=None,
-                 runner_factory=None):
+                 runner_factory=None, shared_resolver=None):
         self.conn_factory = conn_factory
         self.draft_conn_factory = draft_conn_factory
         self.source_conn_factory = source_conn_factory
         self.runner_factory = runner_factory
+        # shared_resolver(launch_body, tok) -> {sharedBackend, resolvedVolumeType,
+        # destPoolHost, isAdmin} via blueprint NFS-export matching (set by wire_production).
+        self.shared_resolver = shared_resolver
 
     # ---- destination connectivity / discovery -------------------------------------
     def test(self, did):
@@ -80,16 +83,27 @@ class DiscoveryService:
         flavor_match = bool(launch_body.get("flavor", {}).get("overrideId")) or (
             has_specs and match_flavor(flavors, **specs) is not None)
 
-        # TODO(live): implement these against the live clouds (LIVE_VALIDATION.md):
-        #   shared_backend  — confirm source volume backend == a destination pool
-        #   resolved_volume_type — destination volume type bound to that shared backend
-        #   is_admin        — source token has the admin role
-        #   volumes_detachable / quota_ok — no pending tasks / sufficient destination quota
+        # Shared-backend / volume-type / admin resolved live via blueprint NFS-export match
+        # (injected). Defaults stay BLOCKING if no resolver is wired.
+        sb = {"sharedBackend": False, "resolvedVolumeType": None, "isAdmin": False}
+        if self.shared_resolver:
+            sb.update(self.shared_resolver(launch_body,
+                                           {"token": token, "authUrl": auth_url,
+                                            "projectId": project_id}))
+        # TODO(live): volumes_detachable / quota_ok still defaulted True (LIVE_VALIDATION.md).
         return score_profile(
             profile, network_map, dest_subnets, dest_macs_in_use=[],
-            is_admin=False, dest_reachable=dest_reachable, shared_backend=False,
-            resolved_volume_type=None, flavor_match=flavor_match,
-            volumes_detachable=True, quota_ok=True)
+            is_admin=sb["isAdmin"], dest_reachable=dest_reachable,
+            shared_backend=sb["sharedBackend"], resolved_volume_type=sb["resolvedVolumeType"],
+            flavor_match=flavor_match, volumes_detachable=True, quota_ok=True)
+
+    def resolve_backend(self, launch_body, auth_url, token, project_id):
+        """Full shared-backend resolution incl. destPoolHost (for the runner's plan)."""
+        if not self.shared_resolver:
+            return {"sharedBackend": False, "destPoolHost": None, "resolvedVolumeType": None}
+        return self.shared_resolver(launch_body,
+                                    {"token": token, "authUrl": auth_url,
+                                     "projectId": project_id})
 
     # ---- execution ----------------------------------------------------------------
     def runner_for(self, migration_id: str):

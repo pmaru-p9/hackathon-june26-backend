@@ -34,13 +34,16 @@ def assemble_runner(mid, *, migrations, discovery, build_source_clients, build_d
         match = match_flavor(discovery.flavors(spec["destinationRef"]), **specs)
         dest_flavor_id = match["id"] if match else None
 
+    # Resolve the destination cinder pool that mounts the same NFS export (blueprint match).
+    rb = discovery.resolve_backend(launch_body, tok["authUrl"], tok["token"], tok["projectId"])
+
     src_nova, src_cinder = build_source_clients(tok)
     dst = build_dest_clients(spec["destinationRef"], spec["targetProject"])
-    # dst: (nova, cinder, neutron, pool_host, volume_type)
-    dst_nova, dst_cinder, dst_neutron, dest_pool_host, dest_volume_type = dst
+    dst_nova, dst_cinder, dst_neutron, _pool, _vt = dst
 
     plan = build_plan(spec, profile, context, dest_flavor_id=dest_flavor_id,
-                      dest_volume_type=dest_volume_type, dest_pool_host=dest_pool_host)
+                      dest_volume_type=rb.get("resolvedVolumeType"),
+                      dest_pool_host=rb.get("destPoolHost"))
     engine = ProductionEngine(migrations, src_nova, src_cinder, dst_nova, dst_cinder,
                               dst_neutron, plan)
     return MigrationRunner(migrations, engine)
