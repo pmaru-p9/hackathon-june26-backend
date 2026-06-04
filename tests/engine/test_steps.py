@@ -65,3 +65,14 @@ def test_verify_ok_when_dest_active_records_source_already_deleted():
     steps = {r.step: r.checkpoint for r in results}
     assert steps["V1"]["destServerId"] == "dst-srv"
     assert steps["V2"]["sourceAlreadyDeleted"] is True
+
+
+def test_verify_waits_through_build_until_active():
+    # a freshly created dest VM is briefly BUILD; V1 must poll, not fail on the first check
+    class _BuildingNova:
+        def __init__(self):
+            self.seq = ["BUILD", "BUILD", "ACTIVE"]
+        def server_status(self, sid):
+            return self.seq.pop(0) if len(self.seq) > 1 else self.seq[0]
+    results = verify_and_cleanup(_BuildingNova(), "dst-srv", attempts=5, delay=0)
+    assert {r.step for r in results} == {"V1", "V2"}
