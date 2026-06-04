@@ -78,7 +78,8 @@ def reverse_migrate(src_nova, src_cinder, dst_nova, dst_cinder, src_neutron, dst
                                root_volume_id=plan.root_volume_id,
                                root_delete_on_termination=plan.dot_original,
                                availability_zone=plan.source_az, security_groups=plan.sgs,
-                               key_name=plan.keypair, metadata=plan.metadata)
+                               key_name=plan.keypair, metadata=plan.metadata,
+                               user_data=plan.user_data, config_drive=plan.config_drive)
         actions.append(f"create_source_vm:{plan.server_id}-recreated")
         for pid in checkpoints.get("S1", {}).get("destPortIds", []):
             dst_neutron.delete_port(pid)

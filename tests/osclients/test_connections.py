@@ -76,3 +76,23 @@ def test_root_volume_multivolume_uses_root_device_then_bootable():
 
     d = server_to_dict(conn, "s2")
     assert d["root_volume_id"] == "root"          # via root_device_name match, not attached[0]
+
+
+def test_server_to_dict_resolves_flavor_name_to_uuid():
+    # the embedded server flavor 'id' is actually the NAME on this cloud; server_to_dict
+    # must resolve it to the real UUID so reverse-migration can recreate the source.
+    server = NS(id="s3", attached_volumes=[{"id": "v1"}], image={},
+                flavor={"id": "m1.medium.vol", "original_name": "m1.medium.vol",
+                        "vcpus": 2, "ram": 4096, "disk": 0},
+                security_groups=[], key_name=None, metadata={},
+                block_device_mapping=[{"boot_index": 0, "volume_id": "v1"}])
+
+    class C:
+        def get_server(self, vid): return server
+        def find_flavor(self, name, ignore_missing=True):
+            return NS(id="b49a293b-real-uuid") if name == "m1.medium.vol" else None
+    port = NS(id="p", network_id="n", mac_address="m", fixed_ips=[{"ip_address": "1.2.3.4"}])
+    conn = NS(compute=C(), network=FakeNetwork([port]))
+
+    d = server_to_dict(conn, "s3")
+    assert d["flavor_id"] == "b49a293b-real-uuid"

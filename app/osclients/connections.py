@@ -98,6 +98,7 @@ def server_to_dict(conn, vm_id: str) -> dict:
                          "ip": fixed.get("ip_address"), "mac": port.mac_address})
     fl = getattr(s, "flavor", None) or {}
     flavor_id = fl.get("id") if isinstance(fl, dict) else getattr(fl, "id", None)
+    flavor_id = _resolve_flavor_id(conn, fl, flavor_id)
     user_data = _user_data(conn, s)
     config_drive = str(getattr(s, "config_drive", "") or "").lower() in ("true", "1")
     return {
@@ -115,6 +116,23 @@ def server_to_dict(conn, vm_id: str) -> dict:
         "root_volume_id": root_volume_id,
         "nics": nics,
     }
+
+
+def _resolve_flavor_id(conn, fl, current):
+    """The embedded server flavor's 'id' can actually be the flavor NAME on some clouds
+    (e.g. 'm1.medium.vol'), but reverse-migration recreates the source via create_server,
+    which needs the real flavor UUID. Resolve name->id; keep current if lookup fails."""
+    name = (fl.get("original_name") or fl.get("name")) if isinstance(fl, dict) else None
+    candidate = current or name
+    if not candidate:
+        return current
+    try:
+        f = conn.compute.find_flavor(candidate, ignore_missing=True)
+        if f and getattr(f, "id", None):
+            return f.id
+    except Exception:  # noqa: BLE001 -- fake/edge conns lack find_flavor
+        pass
+    return current
 
 
 def _user_data(conn, server):
