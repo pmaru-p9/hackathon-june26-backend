@@ -13,6 +13,9 @@ class MigrationContext:
     mac_free: bool = False
     volumes_detachable: bool = False
     quota_ok: bool = False
+    dot_readable: bool = False
+    dot_is_true: bool = False
+    dot_flippable: bool = False
 
 
 @dataclass

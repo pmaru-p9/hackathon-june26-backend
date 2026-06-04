@@ -13,6 +13,9 @@ def run_preflight(ctx: MigrationContext) -> list[Check]:
               "destination subnet must hold the fixed IP and it must be free"),
         Check("P7", ctx.volumes_detachable, "volumes must be detachable (no pending tasks)"),
         Check("P8", ctx.quota_ok, "destination quota must be sufficient"),
+        Check("P9", ctx.dot_readable and (not ctx.dot_is_true or ctx.dot_flippable),
+              "root delete_on_termination must be readable (Nova>=2.79) and, if True, "
+              "updatable (Nova>=2.85) so the source instance can be safely deleted"),
     ]
 
 
