@@ -16,39 +16,40 @@ def test_stage_creates_ports_with_ip_mac():
     assert res.ok and res.checkpoint["destPortIds"] == ["port-10.20.0.15"]
 
 
-def test_cutover_full_sequence_records_checkpoints():
+def test_cutover_bootvol_deletes_source_and_preserves_dot():
     src_nova = FakeNova(); src_nova.add_server("s1", status="ACTIVE")
+    src_nova.set_attachment("s1", "vroot", delete_on_termination=True)
     dst_nova = FakeNova()
-    cinder = FakeCinder()   # shared backend: same array backs source and destination
-    cinder.add_volume("v1", size=10, host="h@be#pool", bootable=True, backend_name="volume-v1")
+    cinder = FakeCinder()   # shared backend
+    cinder.add_volume("vroot", size=1, host="h@be#pool", bootable=True, backend_name="volume-vroot")
+    cinder.add_volume("vdata", size=1, host="h@be#pool", bootable=False, backend_name="volume-vdata")
     results = list(cutover(NovaOps(src_nova), CinderOps(cinder), NovaOps(dst_nova),
-                           CinderOps(cinder),
-                           server_id="s1", volume_ids=["v1"], dest_port_ids=["port-x"],
-                           flavor_id="f1", az="az1", volume_type="vt", sgs=["default"],
-                           keypair="kp", metadata={}, name="db", root_volume_id="v1",
-                           image_meta={"hw_disk_bus": "virtio"}))
+        CinderOps(cinder), server_id="s1", volume_ids=["vroot", "vdata"], root_volume_id="vroot",
+        dest_pool_host="h@be#pool", dest_port_ids=["port-x"], flavor_id="f1", az="az1",
+        volume_type="vt", sgs=["default"], keypair="kp", metadata={}, name="db", image_meta={}))
     steps = {r.step: r for r in results}
-    assert src_nova.stopped == ["s1"]                   # C1 on source
-    assert src_nova.detached == [("s1", "v1")]          # C2 on source
-    assert steps["C3"].checkpoint["unmanaged"] == ["volume-v1"]
-    assert steps["C4"].checkpoint["destVolIds"] == ["dst-v1"]
+    assert src_nova.detached == [("s1", "vdata")]          # C2 data only, NOT vroot
+    assert steps["C2b"].checkpoint == {"dotOriginal": True, "flipped": True}
+    assert src_nova.deleted == ["s1"]                       # C2c deletes source
+    assert set(steps["C3"].checkpoint["unmanaged"]) == {"volume-vroot", "volume-vdata"}
+    assert steps["C4"].checkpoint["rootDestVolId"] == "dst-vroot"
     assert steps["C5"].checkpoint["destServerId"] == "dst-srv"
-    assert dst_nova.created                              # C5 on destination
+    assert dst_nova.created[0]["root_delete_on_termination"] is True
 
 
 def test_cutover_is_incremental_generator():
     """A mid-cutover failure must still yield the earlier steps (so they get checkpointed)."""
     src_nova = FakeNova(); src_nova.add_server("s1", status="ACTIVE")
-    cinder = FakeCinder()   # no volume added -> C3 unmanage raises KeyError mid-stream
+    cinder = FakeCinder()   # no volume added -> C3 unmanage (backend_name) raises KeyError
     gen = cutover(NovaOps(src_nova), CinderOps(cinder), NovaOps(FakeNova()), CinderOps(cinder),
-                  server_id="s1", volume_ids=["missing"], dest_port_ids=[], flavor_id="f",
-                  az="az", volume_type="vt", sgs=[], keypair="kp", metadata={}, name="db",
-                  root_volume_id="missing", image_meta={})
+                  server_id="s1", volume_ids=["missing"], root_volume_id="missing",
+                  dest_pool_host="h@be#pool", dest_port_ids=[], flavor_id="f", az="az",
+                  volume_type="vt", sgs=[], keypair="kp", metadata={}, name="db", image_meta={})
     yielded = []
     with pytest.raises(KeyError):
         for res in gen:
             yielded.append(res.step)
-    assert yielded == ["C1", "C2"]   # C1/C2 emitted before C3 failed
+    assert yielded == ["C1", "C2", "C2b", "C2c"]   # emitted before C3 unmanage failed
 
 
 def test_verify_raises_when_dest_not_active():
