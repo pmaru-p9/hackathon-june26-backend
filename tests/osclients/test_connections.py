@@ -54,3 +54,25 @@ def test_discovery_conn_networks_group_subnets():
     conn = NS(network=network)
     out = DiscoveryConn(conn).networks()
     assert out == [{"id": "n1", "name": "app", "subnets": [{"cidr": "10.20.0.0/24"}]}]
+
+
+def test_root_volume_multivolume_uses_root_device_then_bootable():
+    # no block_device_mapping exposed (common on plain get_server); the data volume is
+    # listed first. Root must be resolved via root_device_name / bootable flag, not attached[0].
+    server = NS(id="s2", attached_volumes=[{"id": "data"}, {"id": "root"}], image={},
+                flavor={"vcpus": 2, "ram": 4096, "disk": 0},
+                security_groups=[], key_name=None, metadata={},
+                root_device_name="/dev/vda")           # no block_device_mapping
+    attach = [NS(volume_id="data", device="/dev/vdb"), NS(volume_id="root", device="/dev/vda")]
+
+    class C:
+        def get_server(self, vid): return server
+        def volume_attachments(self, vid): return attach
+    class BS:
+        def get_volume(self, vid):
+            return NS(is_bootable=("true" if vid == "root" else "false"))
+    port = NS(id="p", network_id="n", mac_address="m", fixed_ips=[{"ip_address": "1.2.3.4"}])
+    conn = NS(compute=C(), network=FakeNetwork([port]), block_storage=BS())
+
+    d = server_to_dict(conn, "s2")
+    assert d["root_volume_id"] == "root"          # via root_device_name match, not attached[0]

@@ -87,8 +87,9 @@ def server_to_dict(conn, vm_id: str) -> dict:
     image = getattr(s, "image", None)
     image_id = image.get("id") if isinstance(image, dict) else getattr(image, "id", None)
     boot_from_volume = bool(attached) and not image_id
-    # root volume = boot_index 0 if exposed, else first attached
-    root_volume_id = _root_volume(s, attached)
+    # root volume: boot_index 0, else match the server's root_device_name, else the bootable
+    # volume, else first attached. attached[0] alone is unreliable for multi-volume VMs.
+    root_volume_id = _root_volume(conn, s, vm_id, attached)
     flavor = _flavor_specs(conn, s)
     nics = []
     for port in conn.network.ports(device_id=vm_id):
@@ -112,11 +113,31 @@ def server_to_dict(conn, vm_id: str) -> dict:
     }
 
 
-def _root_volume(server, attached: list):
+def _root_volume(conn, server, vm_id: str, attached: list):
+    # 1) explicit block_device_mapping with boot_index 0 (most authoritative when exposed)
     bdm = getattr(server, "block_device_mapping", None) or []
     for b in bdm:
         if b.get("boot_index") == 0 and b.get("volume_id"):
             return b["volume_id"]
+    # 2) the attachment whose device is the server's root device (e.g. /dev/vda)
+    root_dev = getattr(server, "root_device_name", None)
+    if root_dev:
+        try:
+            for a in conn.compute.volume_attachments(vm_id):
+                if getattr(a, "device", None) == root_dev:
+                    return getattr(a, "volume_id", getattr(a, "id", None))
+        except Exception:  # noqa: BLE001 -- fake/edge conns lack volume_attachments
+            pass
+    # 3) the bootable volume (ask cinder) — a data volume reports bootable False
+    try:
+        for vid in attached:
+            v = conn.block_storage.get_volume(vid)
+            flag = getattr(v, "is_bootable", getattr(v, "bootable", False))
+            if str(flag).lower() == "true":
+                return vid
+    except Exception:  # noqa: BLE001 -- fake/edge conns lack block_storage
+        pass
+    # 4) last resort
     return attached[0] if attached else None
 
 
