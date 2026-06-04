@@ -4,10 +4,18 @@ from app.osclients.prod_clients import ProdNova
 class FakeCompute:
     def __init__(self):
         self.create_kwargs = None
+        self.calls = []
 
     def create_server(self, **kw):
         self.create_kwargs = kw
         return type("S", (), {"id": "dst-srv"})()
+
+    # record positional args to assert SDK (server, volume) ordering
+    def delete_volume_attachment(self, *args, **kw):
+        self.calls.append(("delete_volume_attachment", args, kw))
+
+    def update_volume_attachment(self, *args, **kw):
+        self.calls.append(("update_volume_attachment", args, kw))
 
 
 class FakeConn:
@@ -44,3 +52,15 @@ def test_create_server_sets_root_delete_on_termination():
     data = next(b for b in bdm if b["uuid"] == "dv-data")
     assert root["delete_on_termination"] is True and root["boot_index"] == 0
     assert data["delete_on_termination"] is False and data["boot_index"] == -1
+
+
+def test_attachment_calls_use_sdk_server_first_ordering():
+    # regression: SDK is (server, volume); these were passed swapped, breaking VMs whose
+    # root volume has delete_on_termination=True (C2b set_dot) and any data-volume detach.
+    conn = FakeConn()
+    nova = ProdNova(conn)
+    nova.detach_volume("SERVER", "VOLUME")
+    nova.set_attachment_dot("SERVER", "VOLUME", False)
+    calls = {name: (args, kw) for name, args, kw in conn.compute.calls}
+    assert calls["delete_volume_attachment"][0] == ("SERVER", "VOLUME")
+    assert calls["update_volume_attachment"][0] == ("SERVER", "VOLUME")

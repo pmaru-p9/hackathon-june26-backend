@@ -83,7 +83,8 @@ class ProdNova:
         self.conn.compute.start_server(sid)
 
     def detach_volume(self, sid, vid):
-        self.conn.compute.delete_volume_attachment(vid, sid)
+        # SDK signature is (server, volume) — server first.
+        self.conn.compute.delete_volume_attachment(sid, vid)
 
     def attach_volume(self, sid, vid):
         self.conn.compute.create_volume_attachment(sid, volume_id=vid)
@@ -129,7 +130,8 @@ class ProdNova:
 
     def set_attachment_dot(self, server_id, volume_id, value):
         # microversion >= 2.85 required to update delete_on_termination.
-        self.conn.compute.update_volume_attachment(volume_id, server_id,
+        # SDK signature is (server, volume) — server first.
+        self.conn.compute.update_volume_attachment(server_id, volume_id,
                                                    delete_on_termination=value)
 
 
