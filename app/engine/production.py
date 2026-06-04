@@ -31,13 +31,15 @@ class ProductionEngine:
     completes (so failures leave accurate checkpoints) and threads runtime values
     (staged port ids → cutover; created dest server id → verify)."""
 
-    def __init__(self, repo, src_nova, src_cinder, dst_nova, dst_cinder, dst_neutron, plan):
+    def __init__(self, repo, src_nova, src_cinder, dst_nova, dst_cinder, dst_neutron, plan,
+                 src_neutron=None):
         self.repo = repo
         self.src_nova = src_nova
         self.src_cinder = src_cinder
         self.dst_nova = dst_nova
         self.dst_cinder = dst_cinder
         self.dst_neutron = dst_neutron
+        self.src_neutron = src_neutron   # needed to recreate the source port in Regime B
         self.plan = plan
         self._dest_port_ids = []
         self._dest_server_id = None
@@ -65,9 +67,10 @@ class ProductionEngine:
         for res in cutover.cutover(
                 self.src_nova, self.src_cinder, self.dst_nova, self.dst_cinder,
                 server_id=p.server_id, volume_ids=p.volume_ids,
+                root_volume_id=p.root_volume_id, dest_pool_host=p.source_host,
                 dest_port_ids=self._dest_port_ids, flavor_id=p.flavor_id, az=p.az,
                 volume_type=p.volume_type, sgs=p.sgs, keypair=p.keypair, metadata=p.metadata,
-                name=p.name, root_volume_id=p.root_volume_id, image_meta=p.image_meta):
+                name=p.name, image_meta=p.image_meta):
             if res.step == "C5":
                 self._dest_server_id = res.checkpoint["destServerId"]
             self.repo.checkpoint(mid, res.step, "done" if res.ok else "failed", res.checkpoint)
@@ -75,13 +78,15 @@ class ProductionEngine:
 
     def verify(self, m):
         mid = self._mid(m)
-        for res in verify.verify_and_cleanup(self.dst_nova, self.src_nova,
-                                             self._dest_server_id, self.plan.server_id,
-                                             self.plan.source_cleanup):
+        for res in verify.verify_and_cleanup(self.dst_nova, self._dest_server_id):
             self.repo.checkpoint(mid, res.step, "done", res.checkpoint)
         return []
 
     def rollback(self, m, failed_at, checkpoints):
-        rb.rollback(self.src_nova, self.dst_cinder, self.dst_neutron, failed_at=failed_at,
-                    checkpoints=checkpoints, source_server_id=self.plan.server_id,
-                    source_host=self.plan.source_host, attach_order=self.plan.attach_order)
+        p = self.plan
+        if "C2c" in checkpoints:   # source instance already deleted -> reverse migration
+            return rb.reverse_migrate(self.src_nova, self.src_cinder, self.dst_nova,
+                                      self.dst_cinder, self.src_neutron, self.dst_neutron,
+                                      checkpoints=checkpoints, plan=p)
+        return rb.rollback_in_place(self.src_nova, self.dst_neutron, checkpoints=checkpoints,
+                                    plan=p)

@@ -27,7 +27,8 @@ def all_pass_context():
     return MigrationContext(is_admin=True, dest_reachable=True, volume_backed=True,
                             shared_backend=True, resolved_volume_type="vt", flavor_match=True,
                             ip_fits_and_free=True, mac_free=True, volumes_detachable=True,
-                            quota_ok=True)
+                            quota_ok=True, dot_readable=True, dot_is_true=False,
+                            dot_flippable=True)
 
 
 def test_build_plan_maps_fields():
@@ -41,26 +42,29 @@ def test_build_plan_maps_fields():
     assert plan.name == "db" and plan.source_cleanup == "delete"
 
 
-def test_production_engine_happy_path_threads_ports_and_server():
+def test_production_engine_bootvol_happy_path():
     repo = MigrationRepo(FakeCustomObjects(), FakeSecrets(), namespace="ns")
     m = repo.create("s1", "db", "d1", "t", "az1", SPEC["networkMap"], {"auto": True}, {},
-                    "keepStopped")
+                    "delete")
     src_nova = FakeNova(); src_nova.add_server("s1", status="ACTIVE")
+    src_nova.set_attachment("s1", "v1", delete_on_termination=False)
     dst_nova = FakeNova()
     cinder = FakeCinder()   # shared backend: one array backs source + destination
     cinder.add_volume("v1", size=10, host="h@be#pool", bootable=True, backend_name="volume-v1")
     neutron = FakeNeutron(); neutron.add_subnet("sub", "netD", "10.20.0.0/24")
 
-    plan = build_plan(SPEC, PROFILE, all_pass_context(),
-                      dest_flavor_id="f1", dest_volume_type="vt", dest_pool_host="h@be#pool")
+    plan = build_plan(SPEC, PROFILE, all_pass_context(), dest_flavor_id="f1",
+                      dest_volume_type="vt", dest_pool_host="h@be#pool", dot_original=False)
     engine = ProductionEngine(repo, NovaOps(src_nova), CinderOps(cinder), NovaOps(dst_nova),
-                              CinderOps(cinder), NeutronOps(neutron), plan)
+                              CinderOps(cinder), NeutronOps(neutron), plan,
+                              src_neutron=NeutronOps(FakeNeutron()))
     MigrationRunner(repo, engine).run(m["id"])
 
     status = repo.get(m["id"])["status"]
     assert status["phase"] == "Completed"
     steps = {s["name"]: s["checkpoint"] for s in status["steps"]}
     assert steps["S1"]["destPortIds"] == ["port-10.20.0.15"]   # staged
+    assert steps["C2c"]["sourceDeleted"] is True               # source instance deleted
     assert steps["C4"]["destVolIds"] == ["dst-v1"]             # managed on dest
     assert steps["C5"]["destServerId"] == "dst-srv"           # created on dest
-    assert src_nova.stopped == ["s1"] and dst_nova.created     # source stopped, dest created
+    assert src_nova.deleted == ["s1"] and dst_nova.created     # source deleted, dest created

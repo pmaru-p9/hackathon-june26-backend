@@ -54,13 +54,13 @@ def test_cutover_is_incremental_generator():
 
 def test_verify_raises_when_dest_not_active():
     dst = FakeNova(); dst.add_server("dst-srv", status="ERROR")
-    src = FakeNova(); src.add_server("s1", status="SHUTOFF")
     with pytest.raises(DestVmNotActive):
-        verify_and_cleanup(NovaOps(dst), NovaOps(src), "dst-srv", "s1", "keepStopped")
+        verify_and_cleanup(NovaOps(dst), "dst-srv")
 
 
-def test_verify_deletes_source_when_requested():
+def test_verify_ok_when_dest_active_records_source_already_deleted():
     dst = FakeNova(); dst.add_server("dst-srv", status="ACTIVE")
-    src = FakeNova(); src.add_server("s1", status="SHUTOFF")
-    verify_and_cleanup(NovaOps(dst), NovaOps(src), "dst-srv", "s1", "delete")
-    assert src.deleted == ["s1"]
+    results = verify_and_cleanup(NovaOps(dst), "dst-srv")
+    steps = {r.step: r.checkpoint for r in results}
+    assert steps["V1"]["destServerId"] == "dst-srv"
+    assert steps["V2"]["sourceAlreadyDeleted"] is True
