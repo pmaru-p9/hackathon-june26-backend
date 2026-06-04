@@ -73,10 +73,17 @@ class ProdNova:
         self.conn.compute.create_volume_attachment(sid, volume_id=vid)
 
     def create_server(self, **kw):
-        # Translate our generic kwargs to the SDK's create_server signature.
-        bdm = [{"uuid": v, "source_type": "volume", "destination_type": "volume",
-                "boot_index": i, "delete_on_termination": False}
-               for i, v in enumerate(kw.get("block_device_mapping", []))]
+        # Translate our generic kwargs to the SDK's create_server signature. The root
+        # volume gets boot_index 0 and the caller-supplied delete_on_termination; data
+        # volumes get boot_index -1 and delete_on_termination False.
+        root = kw.get("root_volume_id")
+        root_dot = kw.get("root_delete_on_termination", False)
+        bdm = []
+        for v in kw.get("block_device_mapping", []):
+            is_root = v == root
+            bdm.append({"uuid": v, "source_type": "volume", "destination_type": "volume",
+                        "boot_index": 0 if is_root else -1,
+                        "delete_on_termination": root_dot if is_root else False})
         srv = self.conn.compute.create_server(
             name=kw["name"], flavor_id=kw["flavor"],
             networks=[{"port": p} for p in kw.get("ports", [])],
@@ -91,6 +98,16 @@ class ProdNova:
 
     def server_status(self, sid):
         return self.conn.compute.get_server(sid).status
+
+    def attachment_dot(self, server_id, volume_id):
+        # Nova volume-attachments API, microversion >= 2.79 exposes delete_on_termination.
+        a = self.conn.compute.get_volume_attachment(volume_id, server_id)
+        return bool(getattr(a, "delete_on_termination", False))
+
+    def set_attachment_dot(self, server_id, volume_id, value):
+        # microversion >= 2.85 required to update delete_on_termination.
+        self.conn.compute.update_volume_attachment(server_id, volume_id,
+                                                   delete_on_termination=value)
 
 
 class ProdNeutron:
