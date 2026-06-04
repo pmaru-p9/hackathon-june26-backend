@@ -8,6 +8,20 @@ replicaCount: 1
 service:
   port: 8080
 
+# Expose the REST API (/api/v1) via the DU's nginx ingress. host/tlsSecret are
+# DU-specific — override per environment.
+ingress:
+  enabled: false
+  className: nginx
+  host: test-du-testbed-only-4661693-sfo.dev.pf9.io
+  path: /api/v1
+  pathType: Prefix
+  tlsSecret: http-wildcard-cert-letsencrypt
+  connectTimeout: 15
+  readTimeout: 600
+  sslRedirect: "false"
+  extraAnnotations: {}
+
 # Region namespace the POD runs in; must match app Settings.namespace
 namespace: pcd-region-one
 
