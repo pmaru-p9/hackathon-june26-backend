@@ -20,6 +20,22 @@ def dest_connection(*, auth_url, username, password, project_name, user_domain,
         "project_domain_name": project_domain}, region_name)
 
 
+def dest_connection_project(*, auth_url, username, password, project_id, user_domain,
+                            region_name=None):
+    """Service-account connection scoped to a specific target project (by id) — where the
+    migrated VM/volumes land. os-volume_manage creates the volume in the token's project."""
+    return _connect("v3password", {
+        "auth_url": auth_url, "username": username, "password": password,
+        "project_id": project_id, "user_domain_name": user_domain}, region_name)
+
+
+def cinder_client(conn, region_name=None):
+    """python-cinderclient v3 from an openstacksdk Connection's session. Microversion 3.8
+    is required for manageable-list (LIVE-VALIDATE)."""
+    from cinderclient import client as cc
+    return cc.Client("3.8", session=conn.session, region_name=region_name)
+
+
 class DiscoveryConn:
     """Wraps an openstacksdk Connection for destination discovery + connectivity test."""
 

@@ -42,11 +42,45 @@ def wire_production():
 
     discovery = DiscoveryService(
         conn_factory=dest_conn, draft_conn_factory=draft_conn,
-        source_conn_factory=source_conn,
-        # runner_factory: LIVE-VALIDATE — assembling the execution ProductionEngine
-        # (dest-scoped cinderclient, flavor/volume-type/pool resolution) requires two
-        # shared-backend clouds to exercise. See LIVE_VALIDATION.md. Until wired, launches
-        # store the Migration CR but do not execute.
-        runner_factory=None)
+        source_conn_factory=source_conn, runner_factory=None)  # set below
+
+    # --- execution wiring (runner_factory) ----------------------------------------
+    from app.osclients.nova import NovaOps
+    from app.osclients.cinder import CinderOps
+    from app.osclients.neutron import NeutronOps
+    from app.osclients.prod_clients import ProdNova, ProdCinder, ProdNeutron
+    from app.engine.assembly import assemble_runner
+
+    def build_source_clients(tok):
+        conn = connections.source_connection(tok["authUrl"], tok["token"], tok["projectId"])
+        return NovaOps(ProdNova(conn)), CinderOps(ProdCinder(connections.cinder_client(conn)))
+
+    def build_dest_clients(did, target_project):
+        d = destinations.get(did)["spec"]
+        creds = destinations.creds(did)
+        conn = connections.dest_connection_project(
+            auth_url=d["authUrl"], username=creds["username"], password=creds["password"],
+            project_id=target_project, user_domain=creds["user_domain"],
+            region_name=d.get("region"))
+        nova = NovaOps(ProdNova(conn))
+        neutron = NeutronOps(ProdNeutron(conn))
+        cinder = CinderOps(ProdCinder(connections.cinder_client(conn)))
+        # LIVE-VALIDATE: resolve the dest cinder pool host + the volume type bound to the
+        # shared backend before cutover. Left None here; preflight blocks until assess's
+        # shared_backend/volume_type facts are implemented (LIVE_VALIDATION.md).
+        return nova, cinder, neutron, None, None
+
+    class _LazyRunner:
+        """Defer the live assembly (source profile + assess) to the background task so the
+        launch HTTP response isn't blocked on OpenStack calls."""
+        def __init__(self, mid):
+            self._mid = mid
+
+        def run(self, mid):
+            assemble_runner(mid, migrations=migrations, discovery=discovery,
+                            build_source_clients=build_source_clients,
+                            build_dest_clients=build_dest_clients).run(mid)
+
+    discovery.runner_factory = lambda mid: _LazyRunner(mid)
 
     set_repos(destinations=destinations, migrations=migrations, discovery=discovery)
