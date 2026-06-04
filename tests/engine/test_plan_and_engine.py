@@ -20,6 +20,9 @@ SPEC = {
 PROFILE = {
     "vmId": "s1", "attachedVolumes": ["v1"], "rootVolumeId": "v1",
     "securityGroups": ["default"], "keyName": "kp", "metadata": {"a": "b"},
+    "flavorId": "src-flav", "availabilityZone": "src-az",
+    "nics": [{"portId": "p1", "networkId": "srcnet", "ip": "10.20.0.15",
+              "mac": "fa:16:3e:aa:11"}],
 }
 
 
@@ -36,8 +39,9 @@ def test_build_plan_maps_fields():
                       dest_flavor_id="f1", dest_volume_type="vt", dest_pool_host="h@be#pool")
     assert plan.server_id == "s1"
     assert plan.volume_ids == ["v1"] and plan.root_volume_id == "v1"
-    assert plan.network_map == [{"destNetworkId": "netD", "ip": "10.20.0.15",
-                                 "mac": "fa:16:3e:aa:11"}]
+    assert plan.network_map == [{"destNetworkId": "netD", "sourceNetworkId": "srcnet",
+                                 "ip": "10.20.0.15", "mac": "fa:16:3e:aa:11"}]
+    assert plan.source_flavor_id == "src-flav" and plan.source_az == "src-az"
     assert plan.flavor_id == "f1" and plan.volume_type == "vt" and plan.az == "az1"
     assert plan.name == "db" and plan.source_cleanup == "delete"
 

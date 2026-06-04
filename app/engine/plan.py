@@ -24,14 +24,21 @@ class MigrationPlan:
     source_cleanup: str
     image_meta: dict = field(default_factory=dict)
     dot_original: bool = False
+    source_flavor_id: str = None       # original source flavor (for reverse migration)
+    source_az: str = None              # original source AZ (for reverse migration)
 
 
 def build_plan(migration_spec: dict, source_profile: dict, context: MigrationContext, *,
                dest_flavor_id: str, dest_volume_type: str, dest_pool_host: str,
                dot_original: bool = False) -> MigrationPlan:
+    src_net_by_port = {n["portId"]: n.get("networkId") for n in source_profile.get("nics", [])}
     return MigrationPlan(
         context=context,
-        network_map=[{"destNetworkId": n["destNetworkId"], "ip": n["ip"], "mac": n["mac"]}
+        # destNetworkId is where the dest port is created (cutover); sourceNetworkId is the
+        # original network, needed to recreate the source port during reverse migration.
+        network_map=[{"destNetworkId": n["destNetworkId"],
+                      "sourceNetworkId": src_net_by_port.get(n["sourcePortId"]),
+                      "ip": n["ip"], "mac": n["mac"]}
                      for n in migration_spec.get("networkMap", [])],
         server_id=source_profile["vmId"],
         volume_ids=list(source_profile["attachedVolumes"]),
@@ -50,4 +57,6 @@ def build_plan(migration_spec: dict, source_profile: dict, context: MigrationCon
         source_cleanup="delete",
         image_meta=source_profile.get("imageMeta", {}),
         dot_original=dot_original,
+        source_flavor_id=source_profile.get("flavorId"),
+        source_az=source_profile.get("availabilityZone"),
     )

@@ -22,6 +22,9 @@ class ProdCinder:
         # 'uuid@backend#pool' — used to resolve the source NFS export via the blueprint.
         return self.cinder.volumes.get(vid)._info.get("os-vol-host-attr:host")
 
+    def volume_status(self, vid):
+        return self.cinder.volumes.get(vid).status
+
     def unmanage(self, vid):
         self.cinder.volumes.unmanage(vid)
 
@@ -125,7 +128,8 @@ class ProdNeutron:
         return p.id
 
     def delete_port(self, pid):
-        self.conn.network.delete_port(pid)
+        # idempotent: a staged port may already be gone (e.g. partial rollback)
+        self.conn.network.delete_port(pid, ignore_missing=True)
 
 
 def manageable_poll(cinder_ops, pool, backend_name):

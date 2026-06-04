@@ -51,6 +51,7 @@ class MigrationRunner:
             # checkpoint. A reverse-migration that itself fails raises ReverseMigrateError
             # -> the volume is safe but a human must finish; mark NeedsAttention.
             from app.engine.rollback import ReverseMigrateError
+            print(f"[migration {mid}] phase failure (triggering rollback): {exc!r}", flush=True)
             checkpoints = self._checkpoints(mid)
             try:
                 self.engine.rollback(m, failed_at=self._last_step(mid) or "Preflight",

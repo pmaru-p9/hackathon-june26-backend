@@ -95,9 +95,13 @@ def server_to_dict(conn, vm_id: str) -> dict:
         for fixed in (port.fixed_ips or []):
             nics.append({"port_id": port.id, "network_id": port.network_id,
                          "ip": fixed.get("ip_address"), "mac": port.mac_address})
+    fl = getattr(s, "flavor", None) or {}
+    flavor_id = fl.get("id") if isinstance(fl, dict) else getattr(fl, "id", None)
     return {
         "id": s.id,
         "flavor": flavor,
+        "flavor_id": flavor_id,
+        "availability_zone": getattr(s, "availability_zone", None),
         "security_groups": [g.get("name") for g in (getattr(s, "security_groups", None) or [])],
         "key_name": getattr(s, "key_name", None),
         "metadata": dict(getattr(s, "metadata", None) or {}),

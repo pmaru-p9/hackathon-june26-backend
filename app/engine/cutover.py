@@ -26,6 +26,11 @@ def cutover(src_nova, src_cinder, dst_nova, dst_cinder, *, server_id, volume_ids
                      checkpoint={"dotOriginal": dot_original, "flipped": flipped})
 
     src_nova.delete(server_id)                                            # C2c
+    # The root volume detaches asynchronously after the instance is deleted; wait until it
+    # is 'available' or Cinder rejects the unmanage in C3.
+    for v in volume_ids:
+        src_cinder.wait_available(v, attempts=settings.manageable_poll_attempts,
+                                  delay=settings.manageable_poll_seconds)
     yield StepResult("C2c", ok=True, checkpoint={"sourceDeleted": True})
 
     unmanaged = [src_cinder.unmanage(v) for v in volume_ids]              # C3

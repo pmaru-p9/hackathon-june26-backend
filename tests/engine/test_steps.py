@@ -49,7 +49,8 @@ def test_cutover_is_incremental_generator():
     with pytest.raises(KeyError):
         for res in gen:
             yielded.append(res.step)
-    assert yielded == ["C1", "C2", "C2b", "C2c"]   # emitted before C3 unmanage failed
+    # C2c's wait_available looks up the (missing) volume's status -> KeyError before C2c yields
+    assert yielded == ["C1", "C2", "C2b"]
 
 
 def test_verify_raises_when_dest_not_active():

@@ -52,15 +52,17 @@ def reverse_migrate(src_nova, src_cinder, dst_nova, dst_cinder, src_neutron, dst
         # recreate the source port(s) with original IP/MAC
         port_ids = []
         for nic in plan.network_map:
-            port_ids.append(src_neutron.create_port(nic["destNetworkId"], nic["ip"],
-                                                    nic["mac"]))
+            src_net = nic.get("sourceNetworkId") or nic["destNetworkId"]
+            port_ids.append(src_neutron.create_port(src_net, nic["ip"], nic["mac"]))
             actions.append(f"recreate_source_port:{nic['ip']}")
-        # recreate the source VM from the re-managed root volume
-        src_nova.create_server(name=f"{plan.server_id}-recreated", flavor=plan.flavor_id,
+        # recreate the source VM from the re-managed root volume, using SOURCE flavor/AZ
+        # (plan.flavor_id / plan.az are destination values and won't exist on the source).
+        src_nova.create_server(name=f"{plan.server_id}-recreated",
+                               flavor=plan.source_flavor_id or plan.flavor_id,
                                ports=port_ids, block_device_mapping=plan.volume_ids,
                                root_volume_id=plan.root_volume_id,
                                root_delete_on_termination=plan.dot_original,
-                               availability_zone=plan.az, security_groups=plan.sgs,
+                               availability_zone=plan.source_az, security_groups=plan.sgs,
                                key_name=plan.keypair, metadata=plan.metadata)
         actions.append(f"create_source_vm:{plan.server_id}-recreated")
         for pid in checkpoints.get("S1", {}).get("destPortIds", []):

@@ -5,6 +5,10 @@ class ManageableNotReady(Exception):
     ...
 
 
+class VolumeNotAvailable(Exception):
+    ...
+
+
 class CinderOps:
     """Thin wrapper translating engine intent into Cinder admin API calls.
     `client` exposes: unmanage(id), list_manageable(host), manage(...),
@@ -23,6 +27,16 @@ class CinderOps:
         """Unmanage a volume by id without needing it tracked locally — used to release
         a destination-managed volume during rollback (we don't need its backend name)."""
         self.c.unmanage(volume_id)
+
+    def wait_available(self, volume_id: str, attempts: int, delay: int) -> None:
+        """After deleting a boot-from-volume instance the root volume detaches
+        asynchronously; Cinder rejects unmanage until it is 'available'."""
+        for _ in range(attempts):
+            if self.c.volume_status(volume_id) == "available":
+                return
+            if delay:
+                time.sleep(delay)
+        raise VolumeNotAvailable(f"{volume_id} did not become available before unmanage")
 
     def resolve_pool(self) -> str:
         pools = self.c.pools()
