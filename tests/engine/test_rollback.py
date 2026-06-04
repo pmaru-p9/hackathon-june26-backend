@@ -42,7 +42,9 @@ def test_regime_b_reverse_migrate_recreates_source_no_data_delete():
         checkpoints=cp, plan=_plan())
     assert "delete_dest_vm:dst-srv" in actions
     assert "unmanage_dest:dst-v1" in actions
-    assert "remanage_source:volume-v1" in actions
+    # NetApp renamed the file to volume-<destVolId> during C4; reverse re-manages by that
+    # current name (not the original C3 source name).
+    assert "remanage_source:volume-dst-v1" in actions
     assert any(a.startswith("recreate_source_port") for a in actions)
     assert "create_source_vm:s1-recreated" in actions
     assert not any(a.startswith("delete_volume") for a in actions)

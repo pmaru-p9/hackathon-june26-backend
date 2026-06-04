@@ -49,15 +49,21 @@ def reverse_migrate(src_nova, src_cinder, dst_nova, dst_cinder, src_neutron, dst
         # re-manage on the SOURCE pool (plan.source_host is the DESTINATION pool used for
         # the forward manage; reverse must target the source pool).
         src_pool = plan.source_pool_host or plan.source_host
-        for backend_name in checkpoints.get("C3", {}).get("unmanaged", []):
+        unmanaged = checkpoints.get("C3", {}).get("unmanaged", [])
+        dest_vol_ids = checkpoints.get("C4", {}).get("destVolIds", [])
+        for i, src_backend in enumerate(unmanaged):
+            # NetApp's forward manage (C4) RENAMES the backing file to volume-<dest-uuid>;
+            # after we unmanage the dest volume above, the file keeps that name. So re-manage
+            # by the dest volume's current name when C4 ran, else the original C3 name.
+            current = f"volume-{dest_vol_ids[i]}" if i < len(dest_vol_ids) else src_backend
             # NFS-family pools need the full share-path source-name; resolve_manage_ref
             # builds it (or polls list_manageable for block drivers).
             ref = src_cinder.resolve_manage_ref(
-                src_pool, backend_name, attempts=settings.manageable_poll_attempts,
+                src_pool, current, attempts=settings.manageable_poll_attempts,
                 delay=settings.manageable_poll_seconds)
-            src_cinder.manage(host=src_pool, ref=ref, name=backend_name,
+            src_cinder.manage(host=src_pool, ref=ref, name=current,
                               volume_type=None, bootable=True, az=None)
-            actions.append(f"remanage_source:{backend_name}")
+            actions.append(f"remanage_source:{current}")
         # recreate the source port(s) with original IP/MAC
         port_ids = []
         for nic in plan.network_map:
