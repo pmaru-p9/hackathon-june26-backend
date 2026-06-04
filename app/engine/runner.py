@@ -44,7 +44,6 @@ class MigrationRunner:
             self.repo.set_phase(mid, "Verifying")
             self._record(mid, self.engine.verify(m))
             self.repo.set_phase(mid, "Completed")
-            self.repo.clear_source_token(mid)
         except ReauthRequired:
             self.repo.set_phase(mid, "NeedsReauth", "source token expired")
         except Exception as exc:  # noqa: BLE001
@@ -53,11 +52,16 @@ class MigrationRunner:
             # unsafe — a human must reconcile. Never tear down a live destination VM.
             if "C5" in steps or self._last_step(mid) in ("V1", "V2"):
                 self.repo.set_phase(mid, "NeedsAttention", f"post-create failure: {exc}")
-                return
-            checkpoints = self._checkpoints(mid)
-            self.engine.rollback(m, failed_at=self._last_step(mid) or "Preflight",
-                                 checkpoints=checkpoints)
-            self.repo.set_phase(mid, "RolledBack", str(exc))
+            else:
+                checkpoints = self._checkpoints(mid)
+                self.engine.rollback(m, failed_at=self._last_step(mid) or "Preflight",
+                                     checkpoints=checkpoints)
+                self.repo.set_phase(mid, "RolledBack", str(exc))
+        finally:
+            # Drop the stored source token on every terminal state except NeedsReauth
+            # (which needs it preserved so /reauth can resume).
+            if self.repo.get(mid)["status"]["phase"] != "NeedsReauth":
+                self.repo.clear_source_token(mid)
 
     def _last_step(self, mid):
         steps = self.repo.get(mid)["status"]["steps"]

@@ -45,4 +45,9 @@ class K8sSecretsAdapter:
         return {k: base64.b64decode(v).decode() for k, v in (s.data or {}).items()}
 
     def delete(self, ns, name):
-        self.core.delete_namespaced_secret(name, ns)
+        from kubernetes.client.exceptions import ApiException
+        try:
+            self.core.delete_namespaced_secret(name, ns)
+        except ApiException as exc:
+            if exc.status != 404:   # already gone is fine (idempotent clear)
+                raise
