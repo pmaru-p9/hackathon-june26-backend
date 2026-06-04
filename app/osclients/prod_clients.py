@@ -87,13 +87,17 @@ class ProdNova:
             bdm.append({"uuid": v, "source_type": "volume", "destination_type": "volume",
                         "boot_index": 0 if is_root else -1,
                         "delete_on_termination": root_dot if is_root else False})
-        srv = self.conn.compute.create_server(
+        attrs = dict(
             name=kw["name"], flavor_id=kw["flavor"],
             networks=[{"port": p} for p in kw.get("ports", [])],
             block_device_mapping_v2=bdm,
-            availability_zone=kw.get("availability_zone"),
-            key_name=kw.get("key_name"), metadata=kw.get("metadata") or {},
+            availability_zone=kw.get("availability_zone"),   # always passed (per design)
+            metadata=kw.get("metadata") or {},
             security_groups=[{"name": g} for g in (kw.get("security_groups") or [])])
+        # Optional fields rejected by Nova if sent as null — include only when set.
+        if kw.get("key_name"):
+            attrs["key_name"] = kw["key_name"]
+        srv = self.conn.compute.create_server(**attrs)
         return {"id": srv.id}
 
     def delete(self, sid):
