@@ -98,8 +98,12 @@ def server_to_dict(conn, vm_id: str) -> dict:
                          "ip": fixed.get("ip_address"), "mac": port.mac_address})
     fl = getattr(s, "flavor", None) or {}
     flavor_id = fl.get("id") if isinstance(fl, dict) else getattr(fl, "id", None)
+    user_data = _user_data(conn, s)
+    config_drive = str(getattr(s, "config_drive", "") or "").lower() in ("true", "1")
     return {
         "id": s.id,
+        "user_data": user_data,          # base64 string or None (cloud-init re-applies it)
+        "config_drive": config_drive,
         "flavor": flavor,
         "flavor_id": flavor_id,
         "availability_zone": getattr(s, "availability_zone", None),
@@ -111,6 +115,20 @@ def server_to_dict(conn, vm_id: str) -> dict:
         "root_volume_id": root_volume_id,
         "nics": nics,
     }
+
+
+def _user_data(conn, server):
+    """The instance's base64 user-data so cloud-init re-applies the same first-boot config
+    (passwords, users, etc.) on the recreated VM. Exposed as OS-EXT-SRV-ATTR:user_data at
+    nova microversion >= 2.57; the SDK maps it to .user_data when negotiated high enough."""
+    ud = getattr(server, "user_data", None)
+    if ud:
+        return ud
+    try:  # fall back to the raw API with an explicit microversion that includes it
+        body = conn.compute.get(f"/servers/{server.id}", microversion="2.57").json()["server"]
+        return body.get("OS-EXT-SRV-ATTR:user_data")
+    except Exception:  # noqa: BLE001 -- fake/edge conns lack .get
+        return None
 
 
 def _root_volume(conn, server, vm_id: str, attached: list):

@@ -64,3 +64,25 @@ def test_attachment_calls_use_sdk_server_first_ordering():
     calls = {name: (args, kw) for name, args, kw in conn.compute.calls}
     assert calls["delete_volume_attachment"][0] == ("SERVER", "VOLUME")
     assert calls["update_volume_attachment"][0] == ("SERVER", "VOLUME")
+
+
+def test_create_server_preserves_user_data_and_config_drive():
+    conn = FakeConn()
+    ProdNova(conn).create_server(name="db", flavor="f", ports=["p"],
+        block_device_mapping=["dv-root"], root_volume_id="dv-root",
+        root_delete_on_termination=False, availability_zone="az", security_groups=[],
+        key_name=None, metadata={}, user_data="I2Nsb3VkLWNvbmZpZw==", config_drive=True)
+    kw = conn.compute.create_kwargs
+    assert kw["user_data"] == "I2Nsb3VkLWNvbmZpZw=="    # base64 cloud-config passed through
+    assert kw["config_drive"] is True
+    assert "key_name" not in kw                          # still omitted when None
+
+
+def test_create_server_omits_user_data_when_absent():
+    conn = FakeConn()
+    ProdNova(conn).create_server(name="db", flavor="f", ports=["p"],
+        block_device_mapping=["dv-root"], root_volume_id="dv-root",
+        root_delete_on_termination=False, availability_zone="az", security_groups=[],
+        key_name=None, metadata={})
+    kw = conn.compute.create_kwargs
+    assert "user_data" not in kw and "config_drive" not in kw

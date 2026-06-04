@@ -70,7 +70,8 @@ class ProductionEngine:
                 root_volume_id=p.root_volume_id, dest_pool_host=p.source_host,
                 dest_port_ids=self._dest_port_ids, flavor_id=p.flavor_id, az=p.az,
                 volume_type=p.volume_type, sgs=p.sgs, keypair=p.keypair, metadata=p.metadata,
-                name=p.name, image_meta=p.image_meta):
+                name=p.name, image_meta=p.image_meta,
+                user_data=p.user_data, config_drive=p.config_drive):
             if res.step == "C5":
                 self._dest_server_id = res.checkpoint["destServerId"]
             self.repo.checkpoint(mid, res.step, "done" if res.ok else "failed", res.checkpoint)

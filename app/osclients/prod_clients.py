@@ -111,6 +111,12 @@ class ProdNova:
         # Optional fields rejected by Nova if sent as null — include only when set.
         if kw.get("key_name"):
             attrs["key_name"] = kw["key_name"]
+        # Preserve cloud-init inputs so the recreated VM re-applies its first-boot config
+        # (passwords, users, etc.). user_data is the base64 string Nova returned for the source.
+        if kw.get("user_data"):
+            attrs["user_data"] = kw["user_data"]
+        if kw.get("config_drive"):
+            attrs["config_drive"] = True
         srv = self.conn.compute.create_server(**attrs)
         return {"id": srv.id}
 

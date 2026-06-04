@@ -27,6 +27,8 @@ class MigrationPlan:
     source_flavor_id: str = None       # original source flavor (for reverse migration)
     source_az: str = None              # original source AZ (for reverse migration)
     source_pool_host: str = None       # source cinder pool host (for reverse re-manage)
+    user_data: str = None              # base64 user-data so cloud-init re-applies first-boot
+    config_drive: bool = False         # preserve config-drive datasource choice
 
 
 def build_plan(migration_spec: dict, source_profile: dict, context: MigrationContext, *,
@@ -61,4 +63,6 @@ def build_plan(migration_spec: dict, source_profile: dict, context: MigrationCon
         source_flavor_id=source_profile.get("flavorId"),
         source_az=source_profile.get("availabilityZone"),
         source_pool_host=source_pool_host,
+        user_data=source_profile.get("userData"),
+        config_drive=bool(source_profile.get("configDrive", False)),
     )

@@ -4,7 +4,7 @@ from app.config import settings
 
 def cutover(src_nova, src_cinder, dst_nova, dst_cinder, *, server_id, volume_ids,
             root_volume_id, dest_pool_host, dest_port_ids, flavor_id, az, volume_type,
-            sgs, keypair, metadata, name, image_meta):
+            sgs, keypair, metadata, name, image_meta, user_data=None, config_drive=False):
     """Boot-from-volume cutover. The root volume is freed by deleting the source instance
     (Nova won't detach a root device volume); delete_on_termination is read, temporarily
     set False if needed, and reapplied on the destination VM. Generator: yields each
@@ -63,5 +63,6 @@ def cutover(src_nova, src_cinder, dst_nova, dst_cinder, *, server_id, volume_ids
                                  block_device_mapping=dest_vol_ids, root_volume_id=root_dest,
                                  root_delete_on_termination=dot_original,
                                  availability_zone=az, security_groups=sgs, key_name=keypair,
-                                 metadata=metadata)
+                                 metadata=metadata, user_data=user_data,
+                                 config_drive=config_drive)
     yield StepResult("C5", ok=True, checkpoint={"destServerId": srv["id"]})
