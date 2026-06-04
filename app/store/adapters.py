@@ -8,7 +8,10 @@ class K8sCustomObjectsAdapter:
         self.api = api
 
     def create(self, ns, kind, body):
-        self.api.create_namespaced_custom_object(GROUP, VERSION, ns, PLURALS[kind], body)
+        # The K8s API requires apiVersion + kind on the object; repos only set
+        # metadata/spec/status, so inject them here.
+        full = {"apiVersion": f"{GROUP}/{VERSION}", "kind": kind, **body}
+        self.api.create_namespaced_custom_object(GROUP, VERSION, ns, PLURALS[kind], full)
 
     def get(self, ns, kind, name):
         return self.api.get_namespaced_custom_object(GROUP, VERSION, ns, PLURALS[kind], name)
