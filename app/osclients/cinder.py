@@ -15,7 +15,7 @@ class CinderOps:
         self.c = client
 
     def unmanage(self, volume_id: str) -> str:
-        backend_name = self.c.volumes[volume_id]["backend_name"]
+        backend_name = self.c.backend_name(volume_id)
         self.c.unmanage(volume_id)          # POST volumes/{id}/action {"os-unmanage": null}
         return backend_name
 

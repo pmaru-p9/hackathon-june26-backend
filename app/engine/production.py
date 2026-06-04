@@ -25,8 +25,9 @@ def build_context_from_profile(p: dict) -> MigrationContext:
 
 
 class ProductionEngine:
-    """Binds OpenStack clients + a per-migration plan. Each phase method records its
-    steps into the repo immediately so failures leave accurate checkpoints."""
+    """Binds OpenStack clients + a MigrationPlan. Records each step into the repo as it
+    completes (so failures leave accurate checkpoints) and threads runtime values
+    (staged port ids → cutover; created dest server id → verify)."""
 
     def __init__(self, repo, src_nova, src_cinder, dst_nova, dst_cinder, dst_neutron, plan):
         self.repo = repo
@@ -36,6 +37,8 @@ class ProductionEngine:
         self.dst_cinder = dst_cinder
         self.dst_neutron = dst_neutron
         self.plan = plan
+        self._dest_port_ids = []
+        self._dest_server_id = None
 
     @staticmethod
     def _mid(m):
@@ -43,35 +46,40 @@ class ProductionEngine:
 
     def preflight(self, m):
         from app.engine.preflight import run_preflight, preflight_passed
-        checks = run_preflight(self.plan["context"])
+        checks = run_preflight(self.plan.context)
         return preflight_passed(checks), checks
 
     def stage(self, m):
         mid = self._mid(m)
-        res = staging.stage_ports(self.dst_neutron, self.plan["networkMap"])
+        res = staging.stage_ports(self.dst_neutron, self.plan.network_map)
+        self._dest_port_ids = res.checkpoint["destPortIds"]
         self.repo.checkpoint(mid, res.step, "done" if res.ok else "failed", res.checkpoint)
-        return []  # already recorded
+        return []
 
     def cutover(self, m):
         mid = self._mid(m)
+        p = self.plan
         # C1-C3 on source clients, C4-C5 on destination clients (shared backend).
-        for res in cutover.cutover(self.src_nova, self.src_cinder, self.dst_nova,
-                                   self.dst_cinder, **self.plan["cutoverArgs"]):
-            self.repo.checkpoint(mid, res.step, "done" if res.ok else "failed", res.checkpoint)
+        for res in cutover.cutover(
+                self.src_nova, self.src_cinder, self.dst_nova, self.dst_cinder,
+                server_id=p.server_id, volume_ids=p.volume_ids,
+                dest_port_ids=self._dest_port_ids, flavor_id=p.flavor_id, az=p.az,
+                volume_type=p.volume_type, sgs=p.sgs, keypair=p.keypair, metadata=p.metadata,
+                name=p.name, root_volume_id=p.root_volume_id, image_meta=p.image_meta):
             if res.step == "C5":
-                self.plan["destServerId"] = res.checkpoint["destServerId"]
+                self._dest_server_id = res.checkpoint["destServerId"]
+            self.repo.checkpoint(mid, res.step, "done" if res.ok else "failed", res.checkpoint)
         return []
 
     def verify(self, m):
         mid = self._mid(m)
         for res in verify.verify_and_cleanup(self.dst_nova, self.src_nova,
-                                             self.plan["destServerId"],
-                                             self.plan["sourceServerId"],
-                                             self.plan["sourceCleanup"]):
+                                             self._dest_server_id, self.plan.server_id,
+                                             self.plan.source_cleanup):
             self.repo.checkpoint(mid, res.step, "done", res.checkpoint)
         return []
 
     def rollback(self, m, failed_at, checkpoints):
         rb.rollback(self.src_nova, self.dst_cinder, self.dst_neutron, failed_at=failed_at,
-                    checkpoints=checkpoints, source_server_id=self.plan["sourceServerId"],
-                    source_host=self.plan["sourceHost"], attach_order=self.plan["attachOrder"])
+                    checkpoints=checkpoints, source_server_id=self.plan.server_id,
+                    source_host=self.plan.source_host, attach_order=self.plan.attach_order)
