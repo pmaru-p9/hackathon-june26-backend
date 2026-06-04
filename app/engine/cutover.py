@@ -48,6 +48,10 @@ def cutover(src_nova, src_cinder, dst_nova, dst_cinder, *, server_id, volume_ids
         # passing the resolved-pool marker as a type would be an invalid type name.
         new = dst_cinder.manage(host=dest_pool_host, ref=ref, name=vid,
                                 volume_type=None, bootable=(vid == root_volume_id), az=az)
+        # manage is async (NetApp: 'managing' -> 'available'); the volume cannot be booted
+        # or unmanaged until it settles, so wait before C5.
+        dst_cinder.wait_available(new["id"], attempts=settings.manageable_poll_attempts,
+                                  delay=settings.manageable_poll_seconds)
         if vid == root_volume_id:
             dst_cinder.set_image_metadata(new["id"], image_meta)
             root_dest = new["id"]

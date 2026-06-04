@@ -21,6 +21,17 @@ def test_unmanage_then_manage_uses_manageable_reference():
     assert fake.managed_on[0]["volume_type"] == "vt"
 
 
+def test_wait_available_polls_until_managing_settles():
+    # NetApp manage is async: 'managing' -> 'available'. wait_available must block until then.
+    class _AsyncManage:
+        def __init__(self):
+            self.seq = ["managing", "managing", "available"]
+        def volume_status(self, vid):
+            return self.seq.pop(0) if len(self.seq) > 1 else self.seq[0]
+    ops = CinderOps(client=_AsyncManage())
+    ops.wait_available("dst-1", attempts=5, delay=0)   # returns (no raise) once available
+
+
 def test_resolve_manage_ref_nfs_builds_full_path_without_listing():
     fake = FakeCinder()
     ops = CinderOps(client=fake)
