@@ -1,12 +1,21 @@
 class DiscoveryService:
-    """Builds a destination connection from saved creds (conn_factory) and exposes
-    live discovery. conn_factory(destination_id) -> connection object."""
+    """Destination discovery + source introspection + runner assembly.
 
-    def __init__(self, conn_factory, draft_conn_factory=None):
+    Factories (injected by wire_production):
+      conn_factory(destination_id)            -> DiscoveryConn  (dest, service acct)
+      draft_conn_factory(creds_dict)          -> DiscoveryConn  (unsaved creds)
+      source_conn_factory(url, token, proj)   -> SourceConn     (source, user token)
+      runner_factory(migration_id)            -> MigrationRunner bound to a ProductionEngine
+    """
+
+    def __init__(self, conn_factory, draft_conn_factory=None, source_conn_factory=None,
+                 runner_factory=None):
         self.conn_factory = conn_factory
-        # draft_conn_factory(creds_dict) -> connection, for validating unsaved creds
         self.draft_conn_factory = draft_conn_factory
+        self.source_conn_factory = source_conn_factory
+        self.runner_factory = runner_factory
 
+    # ---- destination connectivity / discovery -------------------------------------
     def test(self, did):
         try:
             self.conn_factory(did).authorize()
@@ -15,8 +24,6 @@ class DiscoveryService:
             return (False, str(exc))
 
     def test_draft(self, creds: dict):
-        """Validate not-yet-saved destination credentials (used by the registration
-        form's 'Test connection' before the destination exists)."""
         try:
             self.draft_conn_factory(creds).authorize()
             return (True, "ok")
@@ -34,3 +41,58 @@ class DiscoveryService:
 
     def flavors(self, did):
         return self.conn_factory(did).flavors()
+
+    # ---- source introspection -----------------------------------------------------
+    def source_conn(self, auth_url, token, project_id):
+        return self.source_conn_factory(auth_url, token, project_id)
+
+    # ---- preflight assessment -----------------------------------------------------
+    def assess(self, launch_body: dict, auth_url: str, token: str, project_id: str) -> dict:
+        """Gather source + destination facts and score them into the preflight profile.
+
+        SAFE-BY-DEFAULT: facts that require live, driver-specific verification
+        (shared-backend confirmation, destination volume-type resolution, quota, admin
+        role) default to the BLOCKING value so preflight FAILS until they are properly
+        implemented and validated against two live clouds. See LIVE_VALIDATION.md."""
+        from app.osclients.profile import build_migration_profile
+        from app.osclients.assess import score_profile
+        from app.osclients.nova import match_flavor
+
+        sc = self.source_conn(auth_url, token, project_id)
+        profile = build_migration_profile(sc, launch_body["vmIds"][0])
+
+        disc = self.conn_factory(launch_body["destinationId"])
+        try:
+            disc.authorize()
+            dest_reachable = True
+        except Exception:  # noqa: BLE001
+            dest_reachable = False
+
+        networks = disc.networks() if dest_reachable else []
+        dest_subnets = [{"network_id": n["id"], "cidr": s["cidr"], "allocated": []}
+                        for n in networks for s in n.get("subnets", [])]
+        network_map = {nm["sourcePortId"]: nm["destNetworkId"]
+                       for nm in launch_body.get("networkMap", [])}
+
+        specs = profile.get("flavorSpecs") or {}
+        has_specs = all(specs.get(k) is not None for k in ("vcpus", "ram", "disk"))
+        flavors = disc.flavors() if dest_reachable else []
+        flavor_match = bool(launch_body.get("flavor", {}).get("overrideId")) or (
+            has_specs and match_flavor(flavors, **specs) is not None)
+
+        # TODO(live): implement these against the live clouds (LIVE_VALIDATION.md):
+        #   shared_backend  — confirm source volume backend == a destination pool
+        #   resolved_volume_type — destination volume type bound to that shared backend
+        #   is_admin        — source token has the admin role
+        #   volumes_detachable / quota_ok — no pending tasks / sufficient destination quota
+        return score_profile(
+            profile, network_map, dest_subnets, dest_macs_in_use=[],
+            is_admin=False, dest_reachable=dest_reachable, shared_backend=False,
+            resolved_volume_type=None, flavor_match=flavor_match,
+            volumes_detachable=True, quota_ok=True)
+
+    # ---- execution ----------------------------------------------------------------
+    def runner_for(self, migration_id: str):
+        if not self.runner_factory:
+            return None
+        return self.runner_factory(migration_id)
