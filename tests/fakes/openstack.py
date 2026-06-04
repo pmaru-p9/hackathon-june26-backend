@@ -37,6 +37,13 @@ class FakeNova:
     def __init__(self):
         self.servers = {}; self.flavors = {}; self.stopped = []; self.created = []
         self.detached = []; self.deleted = []; self.started = []; self.attached = []
+        self.attachments = {}   # (sid, vid) -> {"delete_on_termination": bool}
+    def set_attachment(self, sid, vid, delete_on_termination=False):
+        self.attachments[(sid, vid)] = {"delete_on_termination": delete_on_termination}
+    def attachment_dot(self, sid, vid):
+        return self.attachments.get((sid, vid), {}).get("delete_on_termination", False)
+    def set_attachment_dot(self, sid, vid, value):
+        self.attachments.setdefault((sid, vid), {})["delete_on_termination"] = value
     def add_server(self, sid, **kw): self.servers[sid] = dict(id=sid, **kw)
     def add_flavor(self, fid, name, vcpus, ram, disk):
         self.flavors[fid] = dict(id=fid, name=name, vcpus=vcpus, ram=ram, disk=disk)

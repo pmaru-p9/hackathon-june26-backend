@@ -30,5 +30,11 @@ class NovaOps:
     def server_status(self, server_id: str) -> str:
         return self.c.server_status(server_id)
 
+    def dot(self, server_id: str, volume_id: str) -> bool:
+        return self.c.attachment_dot(server_id, volume_id)
+
+    def set_dot(self, server_id: str, volume_id: str, value: bool) -> None:
+        self.c.set_attachment_dot(server_id, volume_id, value)
+
     def flavors(self) -> list[dict]:
         return list(self.c.flavors.values())

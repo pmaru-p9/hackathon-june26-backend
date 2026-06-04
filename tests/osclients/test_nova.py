@@ -14,3 +14,14 @@ def test_stop_and_detach_recorded():
     ops = NovaOps(client=fake)
     ops.stop("s1"); ops.detach_volume("s1", "v1")
     assert fake.stopped == ["s1"] and fake.detached == [("s1", "v1")]
+
+
+def test_dot_get_and_set():
+    from app.osclients.nova import NovaOps
+    from tests.fakes.openstack import FakeNova
+    f = FakeNova(); f.add_server("s1", status="ACTIVE")
+    f.set_attachment("s1", "vroot", delete_on_termination=True)
+    ops = NovaOps(f)
+    assert ops.dot("s1", "vroot") is True
+    ops.set_dot("s1", "vroot", False)
+    assert ops.dot("s1", "vroot") is False
