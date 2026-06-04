@@ -47,16 +47,17 @@ class MigrationRunner:
         except ReauthRequired:
             self.repo.set_phase(mid, "NeedsReauth", "source token expired")
         except Exception as exc:  # noqa: BLE001
-            steps = [s["name"] for s in self.repo.get(mid)["status"]["steps"]]
-            # Once the destination VM exists (C5) or we are verifying, auto-rollback is
-            # unsafe — a human must reconcile. Never tear down a live destination VM.
-            if "C5" in steps or self._last_step(mid) in ("V1", "V2"):
-                self.repo.set_phase(mid, "NeedsAttention", f"post-create failure: {exc}")
-            else:
-                checkpoints = self._checkpoints(mid)
+            # The engine's rollback chooses the regime (in-place vs reverse-migration) by
+            # checkpoint. A reverse-migration that itself fails raises ReverseMigrateError
+            # -> the volume is safe but a human must finish; mark NeedsAttention.
+            from app.engine.rollback import ReverseMigrateError
+            checkpoints = self._checkpoints(mid)
+            try:
                 self.engine.rollback(m, failed_at=self._last_step(mid) or "Preflight",
                                      checkpoints=checkpoints)
                 self.repo.set_phase(mid, "RolledBack", str(exc))
+            except ReverseMigrateError as rexc:
+                self.repo.set_phase(mid, "NeedsAttention", str(rexc))
         finally:
             # Drop the stored source token on every terminal state except NeedsReauth
             # (which needs it preserved so /reauth can resume).

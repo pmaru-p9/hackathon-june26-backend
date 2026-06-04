@@ -78,3 +78,20 @@ def test_needs_reauth_preserves_source_token():
     MigrationRunner(repo, ReauthEngine()).run(m["id"])
     assert repo.get(m["id"])["status"]["phase"] == "NeedsReauth"
     assert repo.read_source_token(m["id"])["token"] == "T"   # preserved for /reauth
+
+
+def test_reverse_migrate_failure_marks_needs_attention():
+    from app.engine.rollback import ReverseMigrateError
+    repo = make_repo()
+    m = repo.create("s1", "db", "d1", "t", "az1", [], {"auto": True}, {}, "delete")
+
+    class PostDeleteFail(StubEngine):
+        def cutover(self, m):
+            self.calls.append("cutover")
+            raise RuntimeError("manage failed after source delete")
+
+        def rollback(self, m, failed_at, checkpoints):
+            raise ReverseMigrateError("could not recreate source; volume safe")
+
+    MigrationRunner(repo, PostDeleteFail()).run(m["id"])
+    assert repo.get(m["id"])["status"]["phase"] == "NeedsAttention"

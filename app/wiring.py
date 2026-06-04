@@ -53,7 +53,8 @@ def wire_production():
 
     def build_source_clients(tok):
         conn = connections.source_connection(tok["authUrl"], tok["token"], tok["projectId"])
-        return NovaOps(ProdNova(conn)), CinderOps(ProdCinder(connections.cinder_client(conn)))
+        return (NovaOps(ProdNova(conn)), CinderOps(ProdCinder(connections.cinder_client(conn))),
+                NeutronOps(ProdNeutron(conn)))
 
     def build_dest_clients(did, target_project):
         d = destinations.get(did)["spec"]

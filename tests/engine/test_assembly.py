@@ -50,7 +50,8 @@ def test_assemble_runner_runs_preflight_and_fails_safe():
 
     runner = assemble_runner(
         m["id"], migrations=repo, discovery=FakeDiscovery(),
-        build_source_clients=lambda tok: (NovaOps(FakeNova()), CinderOps(FakeCinder())),
+        build_source_clients=lambda tok: (NovaOps(FakeNova()), CinderOps(FakeCinder()),
+                                          NeutronOps(FakeNeutron())),
         build_dest_clients=lambda did, proj: (
             NovaOps(FakeNova()), CinderOps(FakeCinder()), NeutronOps(FakeNeutron()),
             "h@be#pool", "vt"))
