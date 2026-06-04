@@ -22,3 +22,21 @@ def test_migration_checkpoint_append():
     repo.checkpoint(m["id"], step="C3", state="done", data={"unmanaged": ["volume-v1"]})
     got = repo.get(m["id"])
     assert got["status"]["steps"][-1]["checkpoint"]["unmanaged"] == ["volume-v1"]
+
+
+def test_destination_create_cleans_secret_if_cr_fails():
+    from tests.fakes.k8s import FakeCustomObjects, FakeSecrets
+
+    class FailingCO(FakeCustomObjects):
+        def create(self, ns, kind, body):
+            raise RuntimeError("k8s rejected the CR")
+
+    co, sec = FailingCO(), FakeSecrets()
+    repo = DestinationRepo(co, sec, namespace="ns")
+    import pytest
+    with pytest.raises(RuntimeError):
+        repo.create(name="x", auth_url="u", region="r", project_name="p",
+                    user_domain="Default", project_domain="Default",
+                    username="svc", password="pw")
+    # secret must not be left orphaned
+    assert sec.data == {}

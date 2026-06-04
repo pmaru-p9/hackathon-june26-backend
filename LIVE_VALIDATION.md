@@ -7,14 +7,12 @@ suite (`PCD_LIVE=1`).
 ## Validatable against ONE env (the source DU the POD runs in)
 - [x] Pod deploys, `/healthz` 200, in-cluster `wire_production()` runs.
 - [x] Register destination + list (CRD + Secret written; password only in Secret).
-- [ ] **Test connection** — `POST /destinations/test` and `/destinations/{id}/test` against a
-      real Keystone (`DiscoveryConn.authorize`). Register the DU's own Keystone to validate.
-- [ ] **Discovery** — `/destinations/{id}/projects|azs|networks|flavors` return real data
-      (`DiscoveryConn` SDK calls: `identity.projects`, `compute.availability_zones`,
-      `network.networks/subnets`, `compute.flavors`).
-- [ ] **Source migration-profile** — `GET /source/vms/{id}/migration-profile` against a real
-      VM (`server_to_dict`: boot-from-volume detection, root-volume id, flavor specs, NIC
-      ip/mac). Confirm boot-from-volume vs image-backed classification.
+- [x] **Test connection** — validated against env 1's own Keystone
+      (`test-du-testbed-only-4661693-sfo`, 2026-06-04): `/destinations/{id}/test` → reachable.
+- [x] **Discovery** — validated live: projects (3), AZs (c3, cluster1), networks w/ CIDRs (2),
+      flavors w/ specs (12). `DiscoveryConn` SDK calls confirmed.
+- [x] **Source migration-profile** — validated live on `cirros-vol-vm-1`: boot-from-volume
+      correctly detected, root-volume id resolved, flavor specs + NIC ip/mac mapped.
 
 ## Requires TWO shared-backend envs (true end-to-end)
 - [ ] **Preflight `assess()` safety facts** (currently default to BLOCKING in

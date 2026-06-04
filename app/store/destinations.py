@@ -26,7 +26,12 @@ class DestinationRepo:
                          "projectName": project_name, "userDomain": user_domain,
                          "projectDomain": project_domain, "credentialsSecretRef": secret_name},
                 "status": {"reachable": None, "message": ""}}
-        self.crd.create(self.ns, "DestinationPCD", body)
+        try:
+            self.crd.create(self.ns, "DestinationPCD", body)
+        except Exception:
+            # CR create failed — don't leave the Secret orphaned.
+            self.sec.delete(self.ns, secret_name)
+            raise
         return {"id": did, **body["spec"]}
 
     def list(self):
